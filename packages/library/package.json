@@ -13,6 +13,7 @@
   },
   "scripts": {
     "test": "vitest run",
+    "grade": "node bin/library-grade.mjs",
     "typecheck": "tsc --build"
   },
   "dependencies": {

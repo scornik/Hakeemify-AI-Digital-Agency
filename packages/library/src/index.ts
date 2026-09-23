@@ -13,3 +13,4 @@ export * from './tokens/index.js';
 export * from './manifest/index.js';
 export * from './motion/index.js';
 export * from './references/index.js';
+export * from './grades/index.js';

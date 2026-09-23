@@ -17,6 +17,7 @@
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "check:licences": "node scripts/check-licences.mjs",
+    "library:grade": "node packages/library/bin/library-grade.mjs",
     "test:cov": "vitest run --coverage"
   },
   "devDependencies": {
