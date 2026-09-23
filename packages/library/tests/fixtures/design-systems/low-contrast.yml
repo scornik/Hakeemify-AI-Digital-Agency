@@ -1,0 +1,51 @@
+# FIXTURE — a design system that must not compile.
+#
+# `fg.muted` is index 2 of the neutral ramp and `bg.base` is index 0, so the pair is two
+# near-whites on top of each other. Everything else about this file is well formed: the ids
+# are legal, the seeds derive, the roles resolve. The only thing wrong with it is that a
+# visitor could not read the page, which is exactly the failure a compile-time contrast gate
+# exists to catch. The test asserts the build fails.
+
+id: low_contrast_fixture
+version: 1
+status: reference
+$description: Deliberately unreadable. Used to prove the contrast gate fails the build.
+
+visual_dna:
+  composition_family: minimalist
+  typography_voice: utilitarian
+  visual_energy: 1
+  motion_language: none
+
+seed:
+  neutral:
+    $type: color
+    $value: '#5a6068'
+    $extensions:
+      agency:
+        algorithm: palette
+
+roles:
+  bg:
+    base:
+      $type: color
+      $extensions:
+        agency:
+          role: { ramp: neutral, index: 0 }
+  fg:
+    primary:
+      $type: color
+      $extensions:
+        agency:
+          role: { ramp: neutral, index: 9 }
+    muted:
+      $type: color
+      $description: Two steps off the page ground. Unreadable, and the compiler must say so.
+      $extensions:
+        agency:
+          role: { ramp: neutral, index: 2 }
+
+contrast:
+  pairs:
+    - { fg: fg.primary, bg: bg.base }
+    - { fg: fg.muted, bg: bg.base }

@@ -1,0 +1,48 @@
+# FIXTURE — a design system that reads perfectly in the base scheme and fails in dark.
+#
+# This is the normal way a palette fails, and it is invisible to a base-only contrast check:
+# the light pair is 14:1, and the dark condition moves the foreground to a mid step while the
+# background stays near-black-adjacent, landing under 4.5:1. The compiler checks every
+# condition that moves either side of a declared pair, so this file must not compile.
+
+id: dark_only_failure_fixture
+version: 1
+status: reference
+
+visual_dna:
+  composition_family: minimalist
+  typography_voice: utilitarian
+  visual_energy: 1
+  motion_language: none
+
+seed:
+  neutral:
+    $type: color
+    $value: '#5a6068'
+    $extensions:
+      agency:
+        algorithm: palette
+
+roles:
+  bg:
+    base:
+      $type: color
+      $extensions:
+        agency:
+          role:
+            ramp: neutral
+            index: 0
+            conditions: { dark: 9 }
+  fg:
+    primary:
+      $type: color
+      $extensions:
+        agency:
+          role:
+            ramp: neutral
+            index: 9
+            conditions: { dark: 7 }
+
+contrast:
+  pairs:
+    - { fg: fg.primary, bg: bg.base }

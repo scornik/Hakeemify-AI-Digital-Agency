@@ -1,0 +1,264 @@
+# Reference design system — infrastructure input for the token compiler.
+#
+# This is NOT an authored design system. ARCHITECTURE §10 reserves design authorship for a
+# human; a compiler with no input cannot be tested, so this file exists to give it one. It is
+# deliberately plain: one blue, one grey, a 1.25 type ratio, an 8px unit, a 2px radius. Its
+# `status: reference` keeps it out of every eligible set (v4 §12 lists active/frozen/retired;
+# `reference` is a fourth value meaning "input, never selectable").
+#
+# Shape is DTCG: `$type`, `$value`, `$description`, `$extensions`. Everything the compiler
+# needs beyond DTCG lives under `$extensions.agency`.
+
+id: reference_v1
+version: 1
+status: reference
+$description: >-
+  Neutral reference system. Exists so the token compiler, the contrast gate and the emitted
+  layer order have something real to run against. Not a design decision.
+
+visual_dna:
+  composition_family: minimalist
+  typography_voice: utilitarian
+  visual_energy: 2
+  motion_language: subtle
+
+art_direction_compat: []
+positioning_compat: []
+forbids: []
+
+# ---------------------------------------------------------------------------------------
+# seeds — every derived token below comes from one of these six values.
+# ---------------------------------------------------------------------------------------
+seed:
+  $description: The whole system, before any algorithm runs.
+
+  accent:
+    $type: color
+    $value: '#1f4e8c'
+    $description: Accent hue. Contributes hue and saturation; the ramp supplies lightness.
+    $extensions:
+      agency:
+        algorithm: palette
+
+  neutral:
+    $type: color
+    $value: '#5a6068'
+    $description: Neutral temperature. A cool grey, so surfaces sit under a cool accent.
+    $extensions:
+      agency:
+        algorithm: palette
+
+  type_base:
+    $type: dimension
+    $value: 17px
+    $description: v4 §3's base size.
+    $extensions:
+      agency:
+        algorithm: type_scale
+        ratio: 1.25
+        steps: [-1, 0, 1, 2, 3, 4, 5]
+
+  space_unit:
+    $type: dimension
+    $value: 8px
+    $description: v4 §3's spacing unit.
+    $extensions:
+      agency:
+        algorithm: spacing_scale
+        steps: [0.5, 1, 2, 3, 5, 8, 13]
+
+  radius_base:
+    $type: dimension
+    $value: 2px
+    $description: A 2px base with steps [0, 1, 2] reproduces v4 §3's [0, 2, 4].
+    $extensions:
+      agency:
+        algorithm: radius_scale
+        steps: [0, 1, 2]
+
+# ---------------------------------------------------------------------------------------
+# semantic roles — v4 §3's seven roles, each an index into a generated ramp. This is what
+# makes `hue_adaptable: true` free: change a seed, and every role moves with it.
+# ---------------------------------------------------------------------------------------
+roles:
+  $description: Role = ramp + index. No role ever names a colour.
+
+  bg:
+    base:
+      $type: color
+      $description: Page ground.
+      $extensions:
+        agency:
+          role:
+            ramp: neutral
+            index: 0
+            conditions:
+              dark: 9
+              print: '#ffffff'
+              forced_colors: Canvas
+    raised:
+      $type: color
+      $description: A surface lifted off the ground by value, not by shadow.
+      $extensions:
+        agency:
+          role:
+            ramp: neutral
+            index: 1
+            conditions:
+              dark: 8
+              print: '#ffffff'
+              forced_colors: Canvas
+
+  fg:
+    primary:
+      $type: color
+      $description: Body and heading text.
+      $extensions:
+        agency:
+          role:
+            ramp: neutral
+            index: 9
+            conditions:
+              dark: 0
+              print: '#000000'
+              forced_colors: CanvasText
+    muted:
+      $type: color
+      $description: Secondary text. Still held to 4.5:1 — "muted" is not "unreadable".
+      $extensions:
+        agency:
+          role:
+            ramp: neutral
+            index: 7
+            conditions:
+              dark: 3
+              print: '#000000'
+              forced_colors: CanvasText
+
+  accent:
+    bg:
+      $type: color
+      $description: Accent ground, e.g. a primary button.
+      $extensions:
+        agency:
+          role:
+            ramp: accent
+            index: 8
+            conditions:
+              dark: 3
+              forced_colors: ButtonFace
+    fg:
+      $type: color
+      $description: Text on the accent ground.
+      $extensions:
+        agency:
+          role:
+            ramp: neutral
+            index: 0
+            conditions:
+              dark: 9
+              forced_colors: ButtonText
+
+  border:
+    hairline:
+      $type: color
+      $description: The only elevation this system has (v4 §3 `hairline_only`).
+      $extensions:
+        agency:
+          role:
+            ramp: neutral
+            index: 3
+            conditions:
+              dark: 7
+              forced_colors: CanvasText
+
+# ---------------------------------------------------------------------------------------
+# literal tokens — values no algorithm derives. Conditions apply here too, which is how the
+# reduced-motion kill switch reaches durations and not only the `*` rule.
+# ---------------------------------------------------------------------------------------
+literal:
+  font:
+    heading:
+      $type: fontFamily
+      $value: ['Georgia', 'Times New Roman', 'serif']
+      $description: System-resident only. A reference system ships no webfont.
+    body:
+      $type: fontFamily
+      $value: ['system-ui', 'Segoe UI', 'sans-serif']
+
+  motion:
+    duration:
+      base:
+        $type: duration
+        $value: 420ms
+        $description: v4 §3's default duration.
+        $extensions:
+          agency:
+            conditions:
+              reduced_motion: 0ms
+              print: 0ms
+      slow:
+        $type: duration
+        $value: 700ms
+        $extensions:
+          agency:
+            conditions:
+              reduced_motion: 0ms
+              print: 0ms
+    easing:
+      standard:
+        $type: cubicBezier
+        $value: [0.2, 0.8, 0.2, 1]
+    density_max:
+      $type: number
+      $value: 0.3
+      $description: v4 §3 `max_density`. Read by the pipeline, emitted so the gate can read it too.
+      $extensions:
+        agency:
+          conditions:
+            reduced_motion: 0
+
+  grid:
+    columns:
+      $type: number
+      $value: 12
+    gutter:
+      $type: dimension
+      $value: 24px
+    max_width:
+      $type: dimension
+      $value: 1180px
+
+  target:
+    min_size:
+      $type: dimension
+      $value: 44px
+      $description: WCAG 2.2 SC 2.5.8 floor; a coarse pointer gets more.
+      $extensions:
+        agency:
+          conditions:
+            touch: 48px
+
+  elevation:
+    hairline:
+      $type: string
+      $value: 0 1px 0 rgba(0, 0, 0, 0.06)
+      $extensions:
+        agency:
+          conditions:
+            forced_colors: none
+            print: none
+
+# ---------------------------------------------------------------------------------------
+# contrast — checked at compile time, in the base scheme and in every condition that moves
+# either side of a pair. A failure fails the build.
+# ---------------------------------------------------------------------------------------
+contrast:
+  $description: Every foreground/background pair the renderer is allowed to compose.
+  pairs:
+    - { fg: fg.primary, bg: bg.base }
+    - { fg: fg.primary, bg: bg.raised }
+    - { fg: fg.muted, bg: bg.base }
+    - { fg: fg.muted, bg: bg.raised }
+    - { fg: accent.fg, bg: accent.bg }
+    - { fg: accent.bg, bg: bg.base, size: large }
