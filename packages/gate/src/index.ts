@@ -9,3 +9,4 @@ export * from './repair.js';
 export * from './checks/index.js';
 export * from './artifacts/static-gatherer.js';
 export * from './artifacts/fixture-site.js';
+export * from './artifacts/browser-gatherer.js';
