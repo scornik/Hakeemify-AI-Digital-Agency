@@ -1,0 +1,72 @@
+{
+  "repo": "tremorlabs/tremor",
+  "url": "https://github.com/tremorlabs/tremor",
+  "category": "ui-components",
+  "license": "Apache-2.0",
+  "stars": 3629,
+  "last_push": "2025-10-10",
+  "status_note": "Effectively frozen. Vercel acquired Tremor on 2025-01-22; co-founder stated on the Vercel community forum (quoted in issue #140) that net-new development happens in shadcn/ui. Last substantive commit 2025-04-12 (Tailwind v4); the two Oct-2025 commits only delete CI (chromatic.yml, storybook publish). One maintainer (severinlandolt: 79 of 84 commits). 9 open PRs unmerged including #166 (React 19 / Recharts 3 upgrade, June 2026) and #121 (jsrepo CLI). Legacy npm package @tremor/react is at 3.18.7 (published 2025-01-13, Tailwind v3 + headlessui, repo tremor-npm not archived, not npm-deprecated, 63 open issues, no commits since).",
+  "core_problem": "Gives dashboard builders copy-and-paste React source for 35 Tailwind v4 + Radix components, of which six are Recharts wrappers (Area/Bar/Line/Combo/Donut/Spark) that expose a fixed 9-colour category palette and a uniform props API so charts look consistent without touching Recharts directly.",
+  "architecture": "Not a package: package.json is `tremor-raw`, private, version 0.0.0, and there is no registry.json, components.json, CLI or exports map. Distribution is `scripts/component-folder.js`, which copies every `src/components/<Name>/<Name>.tsx` into `src/components-folder/` and regex-rewrites `../../utils/*` imports to a single `@/lib/utils` import so the file can be pasted into a Next.js app. Each component file carries a header version (`// Tremor AreaChart [v1.0.0]`) and sits beside its own `changelog.md`, `*.stories.tsx` and a Playwright `*.spec.ts` that drives Storybook on :6006 (three browsers; vitest covers only `src/utils/utils.spec.ts`). Styling is 100% literal Tailwind palette classes with inline `dark:` variants; `src/globals.css` defines only animation keyframes under `@theme`, no colour, spacing or radius tokens, and Card hardcodes `dark:bg-[#090E1A]`. Variants use tailwind-variants `tv()` with slots (ProgressBar: background/bar slots x default|neutral|warning|error|success). The chart layer is Recharts 2.15.2 (`ResponsiveContainer` + `Area/Bar/Line/Pie` + `XAxis/YAxis/Tooltip/Legend/CartesianGrid`), all `use client`. Colour mapping lives in `src/utils/chartColors.ts`: a `chartColors` const of 9 keys (blue, emerald, violet, amber, gray, cyan, pink, lime, fuchsia) each holding a 4-tuple of Tailwind classes `{bg, stroke, fill, text}` (e.g. `fill-blue-500`); `constructCategoryColors` assigns colours to series by index modulo palette length; `getColorClassName(color, utility)` falls back to gray. Charts pass empty `fill`/`stroke` props to Recharts and inject the class instead; the area gradient uses `<linearGradient className=\"text-blue-500\"><stop stopColor=\"currentColor\">` so colour flows through CSS `currentColor`. The tooltip cursor is a hardcoded `#d1d5db` hex in all four cartesian charts. Every root element carries a `tremor-id=\"tremor-raw\"` DOM attribute (76 files). Dashboard blocks (KPI cards, tables, 300 blocks) are not in this repo; they live in `tremorlabs/tremor-blocks` (MIT after acquisition, last push 2025-01-22) and the `template-*` repos (pushed Dec 2025 to Jan 2026). No AI wiring of any kind.",
+  "core_innovation": "A per-semantic-colour utility tuple ({bg, stroke, fill, text}) that lets one colour key drive SVG series, legend swatches and tooltip dots consistently through Tailwind classes and currentColor, instead of hex values passed to Recharts.",
+  "strengths": [
+    "Colour-tuple contract in src/utils/chartColors.ts is tiny, typed (`as const satisfies`), and gives every chart, legend and tooltip the same colour source; `constructCategoryColors` is a pure, deterministic series-to-colour assignment.",
+    "Every component is a self-contained file with a header version and a per-component changelog.md, so vendored copies can be diffed against upstream without a package manager.",
+    "Uniform chart props API across Area/Bar/Line/Combo (index, categories, colors, valueFormatter, showLegend, startEndOnly, autoMinValue, customTooltip, tooltipCallback, onValueChange) hides Recharts entirely from the consumer.",
+    "Series animation is off by default (`isAnimationActive={false}`) and legend overflow is handled with an arrow-key scrollable slider (`enableLegendSlider`), a rare detail.",
+    "Storybook + Playwright per component across chromium/firefox/webkit, with `@storybook/addon-a11y` installed.",
+    "Apache-2.0 with clear provenance; ProgressBar (role=progressbar, aria-valuenow/max) and CategoryBar (aria-valuenow) got an explicit a11y fix in PR #100."
+  ],
+  "weaknesses": [
+    "Maintenance is over: single maintainer absorbed into Vercel, no substantive commit since 2025-04, unmerged React 19/Recharts 3 PR, and the founders point users to shadcn/ui charts (which also wrap Recharts).",
+    "Bundle cost is incompatible with our 180 kB JS budget: Recharts 2.15 is 4.6 MB unpacked and drags lodash, victory-vendor (d3-scale/shape/array/interpolate), react-smooth and eventemitter3; a single chart island would ship the React runtime plus roughly 90-110 kB gzipped of Recharts before any page code. Recharts 3 is larger (7.4 MB unpacked).",
+    "Chart accessibility is decorative only: the only aria in AreaChart/BarChart/LineChart/DonutChart is `aria-hidden` on colour swatches; no role=img, no aria-label, no data-table or text fallback, no keyboard access to data points, no `prefers-reduced-motion`, and Recharts 2's `accessibilityLayer` prop is not used. Playwright specs check visibility and CSS classes, not axe results.",
+    "No token layer: colours are literal Tailwind palette classes with inline dark: variants, a hardcoded `#d1d5db` cursor and `dark:bg-[#090E1A]` on Card; re-theming means find-and-replace across files (that is literally how the 'Feat/blue theme' PR #88 worked). This contradicts our rule that design systems are concrete token files the model selects by id.",
+    "All charts are client components; nothing renders server-side or as static SVG, so charts cannot be pre-rendered to a poster for the static fallback.",
+    "Copy-paste distribution without a manifest means no dependency graph, no `requires`/`design_compat` metadata, no install verification; the import-rewrite script assumes an `@/lib/utils` alias.",
+    "The 9-colour palette is unordered by perceptual contrast and cycles modulo length, so a 10th series silently reuses blue; no colour-blind-safe ordering."
+  ],
+  "patterns_to_steal": [
+    "Colour utility tuple {bg, stroke, fill, text} per semantic colour key (src/utils/chartColors.ts) -> design_system: add a `chart_series` block to each design-system token file that maps `series-1..n` to CSS variables and pre-resolved class names, so a post-V1 analytics section can colour SVG marks from the same token file as the page.",
+    "Deterministic series-to-colour assignment `constructCategoryColors(categories, colors)` -> renderer: pure function computed at assembly time, not by the model; snapshot the mapping into the Decision Manifest.",
+    "Per-file header version + sibling changelog.md -> section library: stamp every human-authored section variant/arrangement file with a version header so telemetry and priors can be keyed to an exact variant revision.",
+    "`scripts/component-folder.js` import-rewrite step -> renderer build: an export script that rewrites internal import paths when vendoring a section into a client repo, if we ever hand off source to clients.",
+    "currentColor gradient trick (`<linearGradient className=text-x><stop stopColor=currentColor>`) -> renderer: lets static SVG charts inherit colour from CSS variables with zero JS, useful for the static poster fallback of any data section."
+  ],
+  "patterns_to_avoid": [
+    "Recharts-based client charts -> violates the 180 kB total JS budget and the Astro near-zero-JS stack; any V2 analytics page should render charts as server-generated static SVG (or a tiny island) rather than adopt Recharts wrappers.",
+    "Literal Tailwind palette classes with inline dark: variants as the theming mechanism -> our design systems must be token files with CSS variables; hardcoded `bg-blue-500` and `#d1d5db` cannot be swapped by selecting a design_system_id.",
+    "Copy-paste distribution without a registry/manifest -> we need `requires`, `design_compat` and `a11y` metadata on every section; a bare .tsx file carries none of it.",
+    "Charts with aria-hidden swatches and no text fallback -> would fail our axe-core gate and offers no screen-reader path; do not treat Tremor's chart a11y as a baseline.",
+    "Modulo colour cycling without a contrast-ordered palette -> pick a fixed perceptually ordered series palette per design system and cap series count in the section's `requires`."
+  ],
+  "reusable_patterns": [
+    "ColorUtilityTuple: one semantic colour key resolves to a fixed set of per-utility class names or variables (bg/stroke/fill/text) so markup, SVG and text share a single colour source.",
+    "DeterministicSeriesPalette: series names are mapped to palette slots by index in a pure function, producing a snapshotable mapping rather than per-render randomness.",
+    "FileLevelVersionStamp: each vendored source file carries its own version header and changelog so copies can be diffed against upstream without a package registry.",
+    "ImportRewriteVendoring: a build script copies components and rewrites internal relative imports to a consumer alias, turning a monorepo folder into paste-ready files.",
+    "CurrentColorSVGTheming: SVG fills and gradients read `currentColor` from a CSS class on the element, decoupling chart colours from JS props.",
+    "SlotVariants: tailwind-variants `tv({slots})` gives named sub-parts (background/bar) per semantic variant (success/warning/error) in one typed object."
+  ],
+  "adoption_strategy": "Ignore for V1 and for the marketing-site generator: nothing here touches sections, layout, positioning, art direction or QA, and the chart layer is a frozen Recharts wrapper whose bundle cost alone breaks the JS budget. The only durable value is the colour-tuple shape in src/utils/chartColors.ts; when post-V1 client analytics pages are designed, lift that shape into each design-system token file as CSS variables (`--series-1..n` plus bg/stroke/fill/text resolutions) and render charts as static SVG via the currentColor trick, without pulling Recharts or the Tremor components. If a React chart island is ever justified, shadcn/ui charts are the maintained successor and use the same Recharts base, so nothing is lost by skipping Tremor.",
+  "recommendation": "Ignore",
+  "novelty_score": 2,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": ["design_system", "renderer"],
+  "evidence": [
+    "raw/tremorlabs_tremor/package.json: name `tremor-raw`, private, version 0.0.0, recharts ^2.15.2, tailwindcss ^4.1.3, tailwind-variants, @storybook/addon-a11y; no exports/bin/registry",
+    "scripts/component-folder.js: copies Capitalised .tsx files to src/components-folder and rewrites `../../utils/*` imports to `@/lib/utils`",
+    "src/utils/chartColors.ts: `chartColors` 9 keys x {bg,stroke,fill,text} Tailwind classes, `AvailableChartColors`, `constructCategoryColors` (index modulo), `getColorClassName` (gray fallback)",
+    "src/components/AreaChart/AreaChart.tsx (989 lines): Recharts imports, empty fill/stroke props with class injection, `<linearGradient className=text-*><stop stopColor=currentColor>`, tooltip cursor stroke `#d1d5db`, `isAnimationActive={false}`, legend `tabIndex={0}` + ArrowLeft/ArrowRight slider, only `aria-hidden` attributes, `tremor-id` attribute",
+    "grep across AreaChart/BarChart/LineChart/DonutChart/SparkChart/ComboChart: aria=3/3/3/1/0/3 (all aria-hidden), role=0, accessibilityLayer=0, table=0, sr-only=0, reduced-motion=0; hex `#d1d5db` in 4 charts",
+    "src/globals.css: `@theme` contains only --animate-* keyframes; zero --color/--font/--spacing/--radius tokens",
+    "src/components/Card/Card.tsx: 36-line div with `bg-white dark:bg-[#090E1A]`; src/components/ProgressBar/ProgressBar.tsx: tv() slots + role=progressbar/aria-valuenow; src/components/CategoryBar/CategoryBar.tsx: aria-label + aria-valuenow, no role; src/components/BarList/BarList.tsx: aria-sort, focusRing; src/components/Table/Table.tsx",
+    ".storybook/main.ts (addon-a11y), playwright.config.ts (testDir src/components, webServer storybook :6006, chromium/firefox/webkit), vitest.config.ts (only src/utils/utils.spec.ts), src/components/AreaChart/areachart.spec.ts (visibility and class assertions only)",
+    "No registry.json / components.json / blocks folder found via find; issue #115 (CLI request) open, PR #121 (jsrepo CLI) unmerged",
+    "gh api commits: last substantive commit 2025-04-12 'BREAKING CHANGE: Update to tailwind v4 (#135)'; 2025-10-10 commits delete chromatic.yml and storybook publish; contributors severinlandolt 79, christopherkindl 3",
+    "gh api issues #140 and #148: Vercel acquisition (vercel.com/blog/vercel-acquires-tremor, 2025-01-22); co-founder quote via community.vercel.com/t/tremor-shadcn-and-vercel/17242 that net-new development is in shadcn/ui; 27 open issues, 9 open PRs incl. #166 React 19 / Recharts 3",
+    "npm view @tremor/react: 3.18.7 published 2025-01-13, not marked deprecated, depends on recharts ^2.13.3; tremor-npm repo pushed 2025-01-13, not archived, 63 open issues, package.json tailwindcss ^3.4.16 + @headlessui/react",
+    "npm view recharts: 2.15.3 unpackedSize 4642791 bytes with deps lodash, victory-vendor, react-smooth, eventemitter3, recharts-scale; 3.10.1 unpackedSize 7452998; pnpm-lock resolves recharts@2.15.2 and d3-array/color/ease/format/interpolate/path/scale/shape/time/timer",
+    "gh api orgs/tremorlabs/repos: tremor-blocks (538 stars, pushed 2025-01-22), template-dashboard/insights/database (pushed 2026-01), tremor-npm (16488 stars)"
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "repo": "harlan-zw/unlighthouse",
+  "url": "https://github.com/harlan-zw/unlighthouse",
+  "category": "quality",
+  "license": "MIT",
+  "stars": 4860,
+  "last_push": "2026-09-22",
+  "status_note": "active; v0.18.1 (pre-1.0, single maintainer harlan-zw); pnpm monorepo packages/{core,cli,client,server,unlighthouse,unlighthouse-ci} plus Nuxt/Vite/Webpack integrations",
+  "core_problem": "Runs Lighthouse across an entire site instead of one URL: discovers routes (robots.txt, sitemap.xml, framework route definitions, HTML link crawl), collapses dynamic routes into groups and samples a few per group, runs Lighthouse in a Puppeteer cluster with per-route caching and median-of-N sampling, and renders a live/static comparison dashboard with a CI mode that fails on category score budgets.",
+  "architecture": "packages/core/src/constants.ts defaultConfig: scanner {maxRoutes 200, skipJavascript true, samples 1, throttle true, crawler true, dynamicSampling 8, sitemap true, robotsTxt true, device 'mobile', customSampling {}, ignoreI18nPages true, include/exclude}, puppeteerClusterOptions {concurrency Cluster.CONCURRENCY_BROWSER, maxConcurrency cpus/2, retryLimit 3, retryDelay 2000, timeout 5 min, workerCreationDelay 500}, lighthouseOptions {onlyCategories: performance, accessibility, best-practices, seo}, cache true, outputPath .unlighthouse, ci {budget, reporter, buildStatic}. resolveConfig.ts merges user unlighthouse.config.ts (c12 + defu). Discovery (discovery/routes.ts resolveReportableRoutes): explicit urls (disables sitemap/robots/crawler/sampling) OR site root + robots.txt (parseRobotsTxt: sitemaps + disallow groups merged into exclude) + sitemap.xml via sitemapper (>=50 sitemap URLs on non-localhost disables the crawler) + route definitions discovered from a pages dir (discovery/routeDefinitions.ts globs *.vue/*.md up to depth 5, util/createRoutes builds Nuxt-style paths) + crawler (hook 'discovered-internal-links' queues internal links found by the HTML task; if home page yields no links with skipJavascript it flips to JS execution and disables cache). Route normalisation (router/util.ts normaliseRoute): id = hash(path); definition assigned by (a) scanner.customSampling regex map, (b) provider.mockRouter (router/mockRouter.ts builds regexparam matchers from framework route definitions), or (c) a runtime heuristic that names the route from path segments treating the last segment as dynamic. Sampling: groupBy(route.definition.name) then lodash sampleSize(group, dynamicSampling) - random selection, capped by maxRoutes in worker.queueRoute. Worker (puppeteer/worker.ts): puppeteer-cluster with routeReports Map<id, UnlighthouseRouteReport>; each route runs two tasks in sequence with status waiting|in-progress|completed|failed|ignore|failed-retry: inspectHtmlTask (puppeteer/tasks/html.ts extractHtmlPayload -> processHtml via ultrahtml: title, meta description, og:title/description/image, favicon, hreflang x-default (i18n skip), internal/external link lists) and runLighthouseTask (puppeteer/tasks/lighthouse.ts: reads cached lighthouse.json if present; otherwise spawns process/lighthouse.ts as a child process per sample that calls lighthouse(url, {port, output ['html','json'], ...lighthouseOptions}) against the cluster's Chrome; for samples > 1 uses lighthouse/core/lib/median-run.js computeMedianRun and regenerates artifacts from the median run; strips base64 screenshots for client stability). Hooks (hookable): site-changed, resolved-config, worker-finished, route-definitions-provided, visited-client, task-added/started/complete, discovered-internal-links, puppeteer:before-goto, authenticate. Server (h3 + ws) broadcasts route reports to the Vue client; client columns (constants.ts DefaultColumns) map tabs to LHR keys, e.g. report.audits.largest-contentful-paint sortKey numericValue, report.audits.color-contrast sortKey length:details.items, report.computed.ariaIssues, seo.internalLinks/externalLinks/description/og.image, and an overview screenshot timeline from screenshot-thumbnails. CI (packages/cli/src/ci.ts): --budget N or per-category map; ciBudget.ts isScoreBelowBudget(score*100 < budget) per route per category; exit 1 on any breach; reporters jsonSimple/jsonExpanded/csv/csvExpanded/lighthouseServer; --build-static emits the client as a static site.",
+  "core_innovation": "Route-pattern deduplication with per-group random sampling so a 10,000-page site is audited by scanning ~8 pages per template, combined with a per-route two-task pipeline (cheap HTML extraction feeding crawl + SEO columns, expensive Lighthouse feeding scores) in a browser cluster.",
+  "strengths": [
+    "Discovery ladder (explicit urls > robots/sitemap > framework route files > link crawl) with sensible auto-fallbacks; each stage is a small isolated module.",
+    "Route grouping by definition name (framework router or path heuristic) with customSampling regex overrides is the right unit for a template-driven site: our archetype x arrangement pages map 1:1 to groups.",
+    "Two-task design: the HTML task is cheap (no JS by default) and yields crawl edges plus SEO meta in one pass, so link discovery and meta extraction do not wait on Lighthouse.",
+    "Per-route disk cache keyed by path with cache-busting on config change, plus retry states, make re-runs incremental.",
+    "samples > 1 with computeMedianRun reuses Lighthouse's own median selection instead of inventing one.",
+    "Hookable lifecycle (task-added/started/complete, puppeteer:before-goto, authenticate) allows injecting auth, cookies, or extra checks without forking.",
+    "Client UI: a per-route table with category tabs, sortable metric columns bound to LHR keys, screenshot timeline, grouping by route definition, drill-in to the full Lighthouse HTML - a proven layout for a whole-site gate report.",
+    "MIT, TypeScript, small core (~50 files)."
+  ],
+  "weaknesses": [
+    "CI budget is category-score-only (score*100 < budget) - exactly the noisy signal LHCI warns against; no per-audit assertions, no maxLength/maxNumericValue, no aggregation method, no URL-pattern matrix.",
+    "Sampling uses lodash sampleSize (random): different pages each run, so results are not reproducible and a regression on an unsampled page is missed; no seed or deterministic 'first N by priority'.",
+    "Puppeteer + puppeteer-cluster, not Playwright; adds a second driver and Chrome management; cluster concurrency also contradicts Lighthouse's advice against concurrent runs on one machine (perf metrics degrade).",
+    "Lighthouse-only: no direct axe run (inherits Lighthouse's wcag2a/aa subset), no link-status checking (links are discovered but 404s are not asserted), no placeholder/schema/form checks; SEO columns are display-only, not asserted.",
+    "Pre-1.0 with breaking config changes; single maintainer; client still shows deprecated FID column; i18n pages skipped by default (ignoreI18nPages) which would hide localized routes.",
+    "Route heuristic (last path segment = dynamic) mis-groups shallow static sites (e.g. /services/roofing vs /services/gutters are the same group and may be sampled away).",
+    "Default skipJavascript true for the HTML task can miss client-rendered links; flips only if the home page has zero links."
+  ],
+  "patterns_to_steal": [
+    "Discovery ladder (explicit urls > sitemap/robots > route definitions > crawl) -> qa_gate: for our own Astro build we know every route from the SiteDefinition, so use 'explicit urls' from the build manifest as source of truth and run the crawl only to find links that point outside the manifest (404/orphan detection).",
+    "Route grouping by definition + per-group sampling -> qa_gate: group pages by page_archetype x arrangement_id from the SiteDefinition; run the expensive Lighthouse perf triple on one representative per group (chosen deterministically: highest-priority beat, not random) and run cheap deterministic checks on every page.",
+    "Two-task per route (cheap HTML extraction feeding crawl/SEO, expensive Lighthouse) with status enum waiting|in-progress|completed|failed|ignore|failed-retry -> qa_gate scheduler: Playwright pass 1 (DOM, axe, links, meta, console, placeholders) on all pages; Lighthouse pass 2 on sampled pages; GateReport keeps per-task status.",
+    "Per-route cache keyed by path + config hash -> qa_gate: cache per (page hash, gate config version) so the fix loop only re-audits pages whose HTML changed.",
+    "Client column model {label, key: 'report.audits.<id>', sortKey: 'numericValue' | 'length:details.items', tooltip} -> client-facing gate report: define report columns as data bound to GateReport paths; group rows by archetype; screenshot strip per page.",
+    "Hook names (task-complete, puppeteer:before-goto, authenticate) -> qa_gate: expose the same hook points so archetype-specific pre-steps (cookie banner dismiss, nav open) plug in.",
+    "processHtml SEO extraction (title, description, og:*, favicon, hreflang x-default, internal/external links) -> qa_gate structure checks: extend into asserted checks: duplicate titles/descriptions across site, og:image present and 1200x630, favicon 200, hreflang reciprocity."
+  ],
+  "patterns_to_avoid": [
+    "Category-score budgets as the CI gate -> non-deterministic; use per-audit assertions and resource budgets (LHCI grammar) and treat category scores as reporting only.",
+    "Random route sampling -> non-reproducible; select representatives deterministically from the SiteDefinition and record which pages were sampled in the Decision Manifest.",
+    "Running Lighthouse concurrently in a cluster on one machine -> distorts perf metrics; run perf audits serially (or one per isolated worker) and parallelize only the deterministic Playwright checks.",
+    "Framework page-dir route discovery and mockRouter -> irrelevant for us; our route list comes from the typed SiteDefinition, not from globbing files.",
+    "Depending on the package itself -> Puppeteer-based, pre-1.0, Lighthouse-only; the crawl/sample/cluster ideas are ~300 lines to reimplement over Playwright."
+  ],
+  "reusable_patterns": [
+    "DiscoveryLadder: ordered route sources with automatic fallback and cross-source dedupe by normalized path id.",
+    "TemplateGroupSampling: normalize each URL to a template/definition key and audit only k representatives per key for expensive checks while running cheap checks on all.",
+    "CheapThenExpensiveTaskPair: a fast extraction task that feeds discovery and metadata precedes the slow measurement task, with independent status per task.",
+    "MedianOfSamplesPerRoute: N runs per route collapsed with the engine's own median-run selection before reporting.",
+    "DataBoundReportColumns: report UI columns declared as {key path, sortKey, label, tooltip} over the result JSON, not hand-written per metric."
+  ],
+  "adoption_strategy": "Adapt, do not adopt. Reimplement whole-site gating in our Playwright-based gate: pages come from the SiteDefinition build manifest (not crawling), grouped by archetype x arrangement; every page gets the deterministic pass (axe full tags, DOM/structure/placeholder/meta/schema/link-status/console checks, mobile + desktop); one deterministic representative per group gets Lighthouse 3x serial with LHCI-style per-audit assertions and resource-summary budgets, asserted on the median run. Copy the task-status enum, per-route cache keyed by (page hash, gate version), the hookable pre-goto/authenticate points, and the client's route-table-with-category-tabs layout for the client-facing report. Keep unlighthouse in mind only as an ad-hoc research tool for auditing competitor sites (its crawl + dashboard is convenient for that).",
+  "recommendation": "Adapt",
+  "novelty_score": 5,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": ["qa_gate", "research"],
+  "evidence": [
+    "packages/core/src/constants.ts (defaultConfig: scanner maxRoutes 200 / skipJavascript / samples 1 / throttle / crawler / dynamicSampling 8 / sitemap / robotsTxt / device mobile; puppeteerClusterOptions CONCURRENCY_BROWSER, maxConcurrency cpus/2, retryLimit 3; lighthouseOptions onlyCategories; DefaultColumns per tab bound to report.audits.* keys)",
+    "packages/core/src/types.ts (ResolvedUserConfig incl. ci.budget number | per-category map, scanner options with docs, UnlighthouseTaskStatus enum, UnlighthouseRouteReport, HTMLExtractPayload, UnlighthouseHooks list)",
+    "packages/core/src/discovery/routes.ts (resolveReportableRoutes: urls override disables discovery; robots.txt merge; sitemap >=50 disables crawler; route definitions fallback; discovered-internal-links hook; groupBy definition name + lodash sampleSize(dynamicSampling))",
+    "packages/core/src/discovery/routeDefinitions.ts and util/createRoutes (pages dir glob depth 5, vue/md extensions), packages/core/src/router/mockRouter.ts (regexparam matchers), packages/core/src/router/util.ts normaliseRoute (customSampling regex, mockRouter match, path-segment heuristic)",
+    "packages/core/src/puppeteer/worker.ts (routeReports Map, queueRoute maxRoutes cap, include/exclude filter, cluster monitor stats)",
+    "packages/core/src/puppeteer/tasks/html.ts (extractHtmlPayload, processHtml with ultrahtml: title/description/og/favicon/hreflang x-default/internal+external links)",
+    "packages/core/src/puppeteer/tasks/lighthouse.ts (cache read of lighthouse.json, samples loop, computeMedianRun from lighthouse/core/lib/median-run.js, artifact regeneration from median run) and packages/core/src/process/lighthouse.ts (child process calling lighthouse(url, {port, output ['html','json']}))",
+    "packages/cli/src/ci.ts and packages/cli/src/ciBudget.ts (--budget, isScoreBelowBudget score*100 < budget, per-category loop, exit 1, reporters jsonSimple/jsonExpanded/csv/csvExpanded/lighthouseServer)",
+    "packages/core/package.json (v0.18.1, deps puppeteer-cluster, puppeteer-core, lighthouse, sitemapper, ultrahtml, regexparam, hookable, h3, ws, c12, defu)",
+    "packages/client (Vue/Vite app: App.vue, components/Audit, Cell, Card, LighthouseThreeD, Crux) confirming the dashboard structure"
+  ]
+}

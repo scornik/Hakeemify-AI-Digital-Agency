@@ -1,0 +1,58 @@
+{
+  "repo": "Ratna-Babu/Ai-Website-Builder",
+  "url": "https://github.com/Ratna-Babu/Ai-Website-Builder",
+  "category": "ai-website-builders",
+  "license": "No LICENSE file (README shows an MIT badge but the repo ships no license; GitHub reports none)",
+  "stars": 203,
+  "last_push": "2026-01-21",
+  "status_note": "active but low-frequency; the original TubeGuruji-style 'Bolt clone' tutorial codebase that SamTerces/AI-first-Builder forked",
+  "core_problem": "Prompt-to-React-project generator: Gemini returns a JSON map of Vite/React files, Sandpack renders them in the browser, Convex stores the chat and files, JSZip exports the project.",
+  "architecture": "Next.js 15 App Router in plain JS. configs/AiModel.jsx creates one GoogleGenerativeAI client (model 'gemini-flash-lite-latest', key from NEXT_PUBLIC_GEMINI_API_KEY) and exports three module-level `model.startChat(...)` singletons: chatSession (text/plain, temperature 1), GenAiCode (responseMimeType 'application/json', temperature 1, maxOutputTokens 8192, seeded with a two-turn few-shot history showing a to-do app in the exact output shape) and enhancePromptSession. app/api/gen-ai-code/route.jsx calls GenAiCode.sendMessageStream(prompt), relays chunks as SSE, then JSON.parse(fullText) at the end and emits {final, done} or {error:'Invalid JSON response'}; there is no schema validation. app/api/enhance-prompt/route.jsx reuses chatSession (not enhancePromptSession) so enhancement turns pollute the shared chat history. data/Prompt.jsx holds CODE_GEN_PROMPT (JSON schema {projectTitle, explanation, files:{path:{code}}, generatedFiles}), which visibly contains a leaked editing artifact ('Here's the reformatted and improved version of your prompt:') and the whole schema twice, plus contradictory image rules ('use Unsplash API', 'Do not use images from unsplash.com', 'use images from the internet'). components/custom/CodeView.jsx composes the prompt client-side (JSON.stringify(messages) + CODE_GEN_PROMPT), merges returned files over Lookup.DEFAULT_FILE and renders with SandpackProvider (template 'react', externalResources cdn.tailwindcss.com, dependencies from Lookup.DEPENDANCY). Convex schema: users {name,email,picture,uid}, workspace {messages: v.any(), fileData: v.optional(v.any())}; convex/workspace.js exposes CreateWorkspace/GetWorkspace/UpdateWorkspace/UpdateFiles with v.any() args.",
+  "core_innovation": "None beyond the field baseline; the one cheap trick is anchoring the output shape with responseMimeType='application/json' plus a few-shot exemplar turn in the chat history.",
+  "strengths": [
+    "Format anchoring: GenAiCode is started with a canned user/model exchange that demonstrates the exact JSON envelope, plus Gemini's application/json response mime type; this is the lowest-cost structured-output trick and works reasonably on small models.",
+    "Server route separates the streaming relay from the final parse, so the UI can show progress while the parse decides success or failure.",
+    "203 stars and 111 forks make it the reference implementation of this tutorial family; useful only as a baseline of what 'AI website builder' means to hobbyists."
+  ],
+  "weaknesses": [
+    "Module-level chat singletons (chatSession, GenAiCode) are shared across every request and user: conversation history leaks between users and grows unbounded until the context window overflows.",
+    "Gemini key is read from NEXT_PUBLIC_GEMINI_API_KEY; the NEXT_PUBLIC_ prefix inlines it into the client bundle.",
+    "No output validation: JSON.parse only; no check that /App.js exists, that files compile, that imports are installed; failure surfaces as a Sandpack red overlay.",
+    "temperature 1 / topP 0.95 for code generation and 'Add as many functional features as possible' guarantee non-reproducible, bloated output.",
+    "Prompt is internally contradictory and contains leaked scaffolding text; image guidance leads to hallucinated URLs and broken images.",
+    "Generated project package.json is told to include firebase, @google/generative-ai, MUI, react-icons and framer-motion for a static site; exported bundles are heavy by construction.",
+    "No license file despite the MIT badge; legally unusable as code without asking the author (not that any code is worth taking).",
+    "Persistence is v.any() blobs with no generation lineage, versioning, or telemetry."
+  ],
+  "patterns_to_steal": [
+    "FewShotEnvelopeAnchor: prime the model with a minimal exemplar of the exact typed envelope before the real request → creative_direction / beat selection prompts: show one valid SiteDefinition selection object as an exemplar, then parse with Zod (the Zod parse is what this repo is missing).",
+    "Stream-then-parse split: relay chunks for UX, but only accept the final parsed object → renderer/assembly boundary: nothing partial ever enters state."
+  ],
+  "patterns_to_avoid": [
+    "Shared LLM session singletons across requests → cross-user state leakage and unbounded context; every generation in our pipeline must be a fresh, fully specified call with a recorded predicate snapshot.",
+    "Client-composed system prompt with serialised history → prompt injection and cost abuse; keep prompts server-side and let the model only choose ids.",
+    "JSON without schema validation → cannot detect truncation, missing files or drift; SiteDefinition must be Zod-parsed and rejected on failure.",
+    "Temperature 1 for structured selection → non-reproducible outputs, incompatible with Decision Manifest and telemetry-driven priors.",
+    "Model-chosen image URLs of any kind → asset_constraints require owner-provided or licensed photos with provenance; anything else is a broken-image or licensing incident.",
+    "Prescribing a heavy dependency list to the generated site → violates the 180 kB JS budget and near-zero-JS Astro target."
+  ],
+  "reusable_patterns": [
+    "FewShotEnvelopeAnchor: one exemplar turn demonstrating the exact output envelope, paired with a JSON response mime type.",
+    "StreamThenParse: stream tokens for feedback, commit only the fully parsed final object.",
+    "ScaffoldMergeDefaults: deterministic default files merged under model output (weak: model can overwrite scaffold)."
+  ],
+  "adoption_strategy": "Ignore. This is the canonical tutorial Bolt clone: raw JSON files map, no validation, shared model sessions, client-side prompt assembly, and a prompt that mandates the generic look. Its only transferable idea, few-shot envelope anchoring plus JSON mime type, is a two-line trick we would pair with Zod anyway. Treat its output ('Well Designed UI' Tailwind card grids with hallucinated image URLs) as a negative reference for what the anti-slop gate must reject.",
+  "recommendation": "Ignore",
+  "novelty_score": 1,
+  "difficulty_score": 1,
+  "pipeline_stages_affected": ["anti_slop"],
+  "evidence": [
+    "configs/AiModel.jsx (NEXT_PUBLIC_GEMINI_API_KEY, gemini-flash-lite-latest, module-level chatSession/GenAiCode/enhancePromptSession singletons, CodeGenerationConfig temperature 1 responseMimeType application/json, few-shot to-do exemplar history)",
+    "app/api/gen-ai-code/route.jsx (sendMessageStream relay, JSON.parse(fullText) with 'Invalid JSON response' fallback, no schema)",
+    "app/api/enhance-prompt/route.jsx (uses chatSession rather than enhancePromptSession)",
+    "data/Prompt.jsx (CODE_GEN_PROMPT with duplicated schema, leaked 'Here's the reformatted and improved version of your prompt', contradictory Unsplash rules, dependency list including firebase)",
+    "components/custom/CodeView.jsx (client-side prompt composition, Sandpack preview with cdn.tailwindcss.com, JSZip export)",
+    "convex/schema.js and convex/workspace.js (v.any() messages and fileData)",
+    "raw/Ratna-Babu_Ai-Website-Builder/meta.json (license null, 203 stars, pushed 2026-01-21)"
+  ]
+}

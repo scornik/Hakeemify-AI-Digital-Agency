@@ -1,0 +1,70 @@
+{
+  "repo": "ant-design/ant-design",
+  "url": "https://github.com/ant-design/ant-design",
+  "category": "design-systems",
+  "license": "MIT",
+  "stars": 99590,
+  "last_push": "2026-09-23",
+  "status_note": "active; v6 line adds `theme.zeroRuntime` (ConfigProvider) to skip runtime style generation and import a prebuilt CSS file; cssVar mode also available",
+  "core_problem": "Enterprise React UI library whose entire visual system is computed from a small set of seed tokens by pluggable derivation algorithms, so a whole light/dark/compact theme can be generated from a handful of inputs.",
+  "architecture": "Three token tiers with explicit derivation functions (components/theme/). SeedToken (interface/seeds.ts, ~45 keys: colorPrimary/Success/Warning/Error/Info/Link, colorTextBase, colorBgBase, fontFamily, fontSize=14, lineWidth, borderRadius=6, sizeUnit=4, sizeStep=4, controlHeight=32, zIndexBase, motionUnit=0.1, motionBase, 8 easing curves, wireframe, motion:boolean, focusOutline) -> MapToken via an `algorithm` (DerivativeFunc<SeedToken, MapToken>): themes/default/index.ts spreads genColorMapToken + genFontMapToken + genSizeMapToken + genControlHeight + genCommonMapToken. Colour: @ant-design/colors `generate(base)` produces a 10-step palette in HSV (hue rotates ±2° per step, direction depends on hue band 60–240, saturation −0.16/step light, +0.05 dark, value +0.05/−0.15); dark palettes are produced by mixing those steps into a background colour with a darkColorMap table. genColorMapToken maps palette indices to semantic roles (Bg=1, BgHover=2, Border=3, BorderHover=4, Hover=5, base=6, Active=7, TextHover=8, Text=9, TextActive=10). Neutrals: text via alpha of colorTextBase (0.88/0.65/0.45/0.25), fills via alpha (0.15/0.06/0.04/0.02), backgrounds/borders via darken (light) or lighten (dark) of colorBgBase. Type: genFontSizes(base) = base·e^(i/5) rounded to even, lineHeight=(size+8)/size. Size: sizeUnit·(sizeStep±n). Radius: genRadius piecewise table. Motion: motionDurationFast/Mid/Slow = motionBase + motionUnit·{1,2,3}. Dark and compact algorithms are composable (`algorithm: [darkAlgorithm, compactAlgorithm]`), each taking (seed, prevMapToken). MapToken -> AliasToken via util/alias.ts formatToken (developer-facing names: colorTextHeading, paddingContentHorizontal, boxShadowCard, screenXS...; motion:false zeroes all durations). AliasToken -> per-component ComponentToken via prepareComponentToken (e.g. button/style/token.ts computes paddingBlock from controlHeight/lineHeight/lineWidth). useToken.ts runs getComputedToken through @ant-design/cssinjs useCacheToken (hash-salted, optional CSS-var emission with unitless/ignore/preserve lists); genStyleUtils/genStyleHooks generate per-component style sheets from tokens.",
+  "core_innovation": "Seed → Map → Alias → Component token derivation as composable pure algorithms, so dark and compact modes are functions over seeds (not hand-authored palettes) and a brand hue change regenerates every dependent token.",
+  "strengths": [
+    "The derivation chain is genuinely data-first: a designer owns Seed + Map algorithm, developers own Alias, components own ComponentToken; every layer is a pure function with a typed interface.",
+    "@ant-design/colors generate() is a compact, deterministic HSV palette algorithm with hue-band-aware rotation — exactly what `hue_adaptable: true` needs; dark palettes are a table-driven mix into a background colour, not a second hand-made palette.",
+    "Algorithms compose: compact = default then size/font/controlHeight re-derived from fontSizeSM and controlHeight−4; dark = default then colour maps re-derived. Composition order is data (an array).",
+    "Font-size scale is a formula (base·e^(i/5), even-rounded) with a line-height formula ((size+8)/size), not a lookup table.",
+    "motion:boolean and focusOutline:boolean seeds are honoured centrally (formatToken zeroes durations; lineWidthFocus=0) — an example of a global switch modelled as a token.",
+    "v6 zeroRuntime + cssVar mode acknowledge that runtime cssinjs is a cost and give a static-CSS escape hatch."
+  ],
+  "weaknesses": [
+    "Runtime @ant-design/cssinjs by default (hash-salted style injection, React context); even in zeroRuntime mode the token pipeline is JS at runtime. Not usable inside our JS budget as a library.",
+    "Enterprise/admin aesthetics; the component set is irrelevant to marketing sites.",
+    "The Map/Alias interfaces are very large (alias.ts 649 lines, maps/colors.ts 644 lines) and many alias values are arbitrary constants (controlPaddingHorizontal: 12, fontWeightStrong: 600) rather than derived — the derivation story is partial.",
+    "HSV-based generation (not OKLCH) produces perceptually uneven steps for some hues; the hue-band heuristic (60–240 vs else) is empirical.",
+    "genRadius is a piecewise if-ladder — fine, but it shows the limits of encoding design intent as branches instead of a declared scale."
+  ],
+  "patterns_to_steal": [
+    "Seed → Map → Alias → Component tiers with a typed DerivativeFunc per tier -> design_system: our YAML design-system files should carry a `seeds` block plus a named `algorithm` (default | dark | compact | custom) so `hue_adaptable: true` systems regenerate palettes from a client's brand hue in code, and the model only selects the design_system_id.",
+    "@ant-design/colors generate() (HSV 10-step, hue-band rotation, dark via mix table) -> design_system: port as a pure TS function (~100 lines) behind a `palette_algorithm` id; run once at build; write results as CSS vars. Consider OKLCH variant behind another id.",
+    "Palette-index-to-role mapping (Bg=1, Border=3, Hover=5, base=6, Active=7, Text=9) -> design_system: semantic role table as data so a design system can remap roles (e.g. luxury systems using darker 'base' indices).",
+    "Composable algorithm array (`[dark, compact]`) each taking (seed, prevMap) -> design_system: conditions like dark mode and density are algorithms applied in order, snapshotted into the Decision Manifest.",
+    "genFontSizes base·e^(i/5) + lineHeight=(size+8)/size -> design_system: a type-scale generator parameterised by base and a curve id; expose ratio choice in visual_dna.",
+    "motion:false seed zeroing all durations in formatToken -> motion: a single top-level `motion_enabled`/reduced-motion switch that collapses all duration tokens at build time."
+  ],
+  "patterns_to_avoid": [
+    "@ant-design/cssinjs runtime style injection and hash-salted classnames -> we emit static CSS; no style runtime in islands.",
+    "Component-token tier as hand-computed per-component objects (377-line button token file) -> our section library should reference semantic tokens directly; component tokens only where a rule can derive them.",
+    "Alias tier full of magic constants -> keep alias values derived or explicitly declared as `visual_dna` choices; never silent constants.",
+    "Letting the model or a runtime touch seeds -> seeds are authored/derived in code; the model selects design_system_id only."
+  ],
+  "reusable_patterns": [
+    "SeedMapAliasComponent: four token tiers connected by pure derivative functions with typed inputs/outputs.",
+    "HsvPaletteGenerate: 10-step palette from one base colour via per-step hue/saturation/value deltas with a hue-band direction rule; dark palette = mix table into background.",
+    "RoleIndexTable: semantic colour roles defined as indices into a generated palette (Bg=1 ... TextActive=10).",
+    "ComposableAlgorithms: theme modes (dark, compact) as ordered pure functions (seed, prevMap) -> map.",
+    "ExponentialTypeScale: fontSize_i = base·e^(i/5) rounded to even; lineHeight = (size+8)/size.",
+    "GlobalSwitchToken: booleans (motion, focusOutline) in the seed tier that collapse dependent tokens centrally."
+  ],
+  "adoption_strategy": "Adapt. Port the derivation algorithms (generate(), genColorMapToken role table, genFontSizes, genSizeMapToken, genControlHeight, genCommonMapToken motion durations) into a pure TS `deriveTokens(seed, algorithms[])` module used by the design-system compiler at build time; store seeds and algorithm ids in the YAML design-system files; emit CSS variables per scheme. Ignore antd, cssinjs and the component library entirely.",
+  "recommendation": "Adapt",
+  "novelty_score": 6,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": [
+    "design_system",
+    "art_direction",
+    "motion",
+    "renderer"
+  ],
+  "evidence": [
+    "components/theme/interface/seeds.ts (SeedToken), interface/alias.ts, interface/maps/{colors,font,size,style}.ts",
+    "components/theme/themes/seed.ts (default seed values), themes/default/index.ts (derivative), themes/default/colors.ts, themes/default/colorAlgorithm.ts",
+    "components/theme/themes/dark/index.ts, dark/colors.ts, dark/colorAlgorithm.ts (lighten-based neutrals)",
+    "components/theme/themes/compact/index.ts, compact/genCompactSizeMapToken.ts",
+    "components/theme/themes/shared/{genColorMapToken,genFontMapToken,genFontSizes,genSizeMapToken,genControlHeight,genRadius,genCommonMapToken}.ts",
+    "components/theme/util/alias.ts formatToken (Map -> Alias, motion:false handling)",
+    "components/theme/useToken.ts getComputedToken + useCacheToken cssVar config; components/theme/context.ts (zeroRuntime flag)",
+    "components/theme/util/genStyleUtils.ts, components/button/style/token.ts prepareComponentToken",
+    "ant-design/ant-design-colors src/generate.ts (HSV algorithm, darkColorMap)"
+  ]
+}

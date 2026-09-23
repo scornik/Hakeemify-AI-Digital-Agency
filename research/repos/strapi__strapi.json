@@ -1,0 +1,65 @@
+{
+  "repo": "strapi/strapi",
+  "url": "https://github.com/strapi/strapi",
+  "category": "cms",
+  "license": "MIT (Expat) for the Community Edition; any code under an `ee/` directory is under the separate Enterprise license (packages/core/admin/ee/LICENSE). EE terms also apply if you hold a Strapi Cloud account.",
+  "stars": 73216,
+  "last_push": "2026-09-22",
+  "status_note": "active (v5.54.0 on develop); EE features (SSO, audit logs, review workflows, content releases) gated by license file/registry (packages/core/core/src/ee/license.ts).",
+  "core_problem": "A Node (Koa + Knex) headless CMS where content types are JSON schema files on disk (src/api/*/content-types/*/schema.json) plus reusable `components`, generating DB tables, REST/GraphQL APIs, a React admin, draft/publish and a plugin system.",
+  "architecture": "packages/core/core is the runtime (Strapi.ts container, loaders for apis/components/plugins/policies/middlewares, registries, services). Content-type definitions are validated with yup (packages/core/core/src/domain/content-type/validator.ts: info.singularName/pluralName kebab-case, attributes, lifecycles, actions) and typed in packages/core/types/src/schema: Struct.ContentTypeSchema/ComponentSchema with `attributes` as a union of Attribute definitions (string, text, richtext, blocks, json, enumeration, relation, media, component, dynamiczone, uid...). `component` attribute = {type:'component', component: UID.Component, repeatable?} whose value is the component entry (or array). `dynamiczone` = {type:'dynamiczone', components: UID.Component[], min/max, required} whose value is `Array<Data.Component<UID> & {__component: UID}>` (packages/core/types/src/schema/attribute/definitions/dynamic-zone.ts) — the typed block list, discriminated by `__component`; components are declared once under src/components/<category>/<name>.json and reused across zones; dynamic zones cannot be nested inside components. `blocks` is a separate rich-text JSON attribute with a fixed node grammar (paragraph/heading/list/quote/code/image) (definitions/blocks.ts). Document Service API (v5): strapi.documents(uid).findMany/findFirst/findOne/create/update/delete/count/clone and, when draftAndPublish is enabled, publish/unpublish/discardDraft (packages/core/types/src/modules/documents/service-instance.ts); implemented as per-content-type repositories wrapped by a middleware manager (`strapi.documents.use((ctx,next))` with ctx{uid, action, params, contentType}) (packages/core/core/src/services/document-service/index.ts, middleware.ts). Draft & publish: draft and published rows are separate entries sharing a documentId; the `status` param defaults to draft and is translated to a `publishedAt` $null/$notNull lookup (document-service/draft-and-publish.ts); components are deep-cloned per status (components.ts). Plugins: server (register/bootstrap/routes/controllers/services/content-types) + admin (React) halves; core plugins content-manager, content-type-builder (edits schema.json via API), upload, i18n, users-permissions, graphql, documentation. EE: packages/core/core/src/ee/license.ts reads a license file, verifies against a registry, and unlocks features (sso, audit-logs, review-workflows, content-releases). Also packages/core/core/src/ai.ts and mcp.ts entry points, and an OpenAPI package.",
+  "core_innovation": "Filesystem JSON content-type schemas with reusable components and dynamic zones (typed polymorphic block lists discriminated by __component), edited visually by the Content-Type Builder and exposed through a middleware-wrapped Document Service with separate draft/published entries.",
+  "strengths": [
+    "dynamiczone is a well-understood typed block list: allowed component UIDs are explicit, min/max enforced, value rows carry `__component`; components are single-sourced JSON reused across content types (similar to Payload's config.blocks references).",
+    "Document Service middlewares (`strapi.documents.use`) give one interception point per action for cross-cutting rules, typed by uid/action/params.",
+    "Draft and published as separate entries sharing documentId keeps the published row untouched while drafts evolve; discardDraft restores from published.",
+    "Schema validation of content types with yup at load time and kebab-case naming rules; generated TS types for schemas (Public.ContentTypeSchemas registry).",
+    "Large ecosystem, MIT core, OpenAPI generation, GraphQL plugin, data-transfer package for export/import between environments."
+  ],
+  "weaknesses": [
+    "Content types live as JSON files edited by the admin at dev time (Content-Type Builder writes schema.json and restarts the server); they are not TypeScript/Zod and cannot express predicates, cross-field allow-lists, or context-dependent component filtering (no analogue of Payload's blocks filterOptions).",
+    "dynamiczone cannot be nested (no dynamic zone inside a component) and components cannot be filtered per position; arrangement/slot/fact binding would have to be flat components with string fields.",
+    "Heavy runtime: Koa server + full React admin + Knex; multi-tenancy is absent (one Strapi = one project; agencies run one instance per client or filter by relation).",
+    "EE split: workflows/releases/audit are licensed; ee/ code is under a different license and must not be copied.",
+    "Versioning is draft/published only (plus Content History in EE/Cloud); no full revision history in CE.",
+    "Lifecycle hooks are per content type (beforeCreate etc.) with less path context than Payload field hooks."
+  ],
+  "patterns_to_steal": [
+    "`__component` discriminator + components single-sourced in a category/name namespace -> name section variants as `family/variant` ids (e.g. proof/logo_wall_v2) in the section library and reference them from SiteDefinition.sections[].variant_id (section library / assembly).",
+    "Document Service middleware chain typed by (uid, action, params) -> a single `store.use()` interception layer in our Drizzle repository for audit logging and invariant enforcement on every write (fact_registry / cms).",
+    "Separate draft and published entries sharing a documentId, status resolved to a publishedAt null/notNull lookup -> sites table with published_version_id pointer + draft rows; reads default to published unless status=draft is requested (versions).",
+    "Load-time yup validation of content-type files with strict naming rules -> load-time Zod validation of every playbook and section-library YAML with a strict id grammar; fail the build on violations (niche playbook / section library)."
+  ],
+  "patterns_to_avoid": [
+    "Filesystem JSON schemas mutated by an admin UI at runtime -> our contract is code-only Zod; schema changes are PRs.",
+    "Flat dynamic zone without contextual allow-lists -> insufficient for `requires`/`design_compat` gating; keep eligibility in the predicate layer.",
+    "Strapi's `blocks` rich-text grammar for section copy -> we bind slots to facts, not free rich text.",
+    "Copying anything under ee/ directories -> different license."
+  ],
+  "reusable_patterns": [
+    "DiscriminatedComponentList: array of component rows each tagged with a component UID from an explicit allow-list with min/max.",
+    "SingleSourcedComponents: reusable sub-schemas declared once in a namespaced registry and referenced by id.",
+    "ActionMiddlewareChain: every data-service action passes through registered (ctx, next) middlewares typed by entity and action.",
+    "DualEntryDraftPublish: draft and published are distinct rows sharing a document id; reads pick by status.",
+    "StrictSchemaLoadValidation: schema files validated with naming rules at boot; invalid definitions fail startup."
+  ],
+  "adoption_strategy": "Ignore as a runtime — Strapi's schema.json + Koa + React admin is a heavier, less typed alternative to Payload with no advantage for an Astro/Zod pipeline; its dynamiczone is strictly less expressive than Payload's blocks (no nesting, no contextual filterOptions) and far less than a Zod discriminated union. Reuse only the ideas: `__component`-style variant ids, a middleware chain on the repository, the dual-entry draft/published read model, and strict boot-time validation of authored schema files.",
+  "recommendation": "Ignore",
+  "novelty_score": 3,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": [
+    "cms",
+    "design_system",
+    "fact_registry"
+  ],
+  "evidence": [
+    "LICENSE (MIT Expat for CE; ee/ directories under packages/core/admin/ee/LICENSE)",
+    "packages/core/types/src/schema/attribute/definitions/dynamic-zone.ts (DynamicZone<components[]>, value rows with __component), component.ts (component/repeatable), blocks.ts (fixed rich-text node grammar)",
+    "packages/core/types/src/schema/index.ts (ContentTypes/Components registries, AttributesByType helpers)",
+    "packages/core/types/src/modules/documents/service-instance.ts (findMany/create/update/publish/unpublish/discardDraft) and middleware.ts (Context{uid, action, params, contentType})",
+    "packages/core/core/src/services/document-service/index.ts (createDocumentService, middleware manager, per-uid repositories), draft-and-publish.ts (status default draft, publishedAt lookup), components.ts",
+    "packages/core/core/src/domain/content-type/validator.ts (yup validation of info/attributes/lifecycles)",
+    "packages/core/core/src/ee/license.ts (license file/registry verification; features sso, audit-logs), packages/core/strapi/package.json (5.54.0, 'SEE LICENSE IN LICENSE')",
+    "tree: packages/core/{content-type-builder,content-manager,content-releases,review-workflows,openapi,data-transfer}, packages/plugins/{graphql,i18n,users-permissions,documentation}, packages/core/core/src/{ai.ts,mcp.ts}"
+  ]
+}

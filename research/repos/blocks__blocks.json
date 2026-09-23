@@ -1,0 +1,68 @@
+{
+  "repo": "blocks/blocks",
+  "url": "https://github.com/blocks/blocks",
+  "category": "visual-editors",
+  "license": "MIT",
+  "stars": 5095,
+  "last_push": "2026-09-18",
+  "status_note": "abandoned alpha. master's last commit is 2020-06-26; the 2026 pushed_at comes only from renovate bot branches (renovate/babel-monorepo, renovate/eslint-7.x, ...). README says 'very early alpha ... not yet fully functional'. Stack is Gatsby 2, React 16.13, theme-ui 0.3, Babel 7.10.",
+  "core_problem": "A WYSIWYG page builder whose document is literally a JSX source string: every visual edit is a Babel AST transform on that string, so the output is always real, exportable React/MDX code.",
+  "architecture": "Yarn workspaces: packages/blocks-ui (the editor), packages/property-controls (Framer-style control descriptors), packages/react (@blocks/react: a small section library of headers/footers/quotes/taglines built on theme-ui `sx` and `variant`), packages/gatsby-plugin-blocks. Source of truth: a JSX code string held in React state (providers/code.js `useState`). Rendering: transforms.js `toTransformedJSX` runs @babel/standalone in the browser with a plugin chain [set-default-export-to-container, drag-and-drop, inject-blocks-root, remove-named-exports, remove-imports, transform-react-jsx with pragma 'jsx'] and inline-render.js evaluates the result with `new Function('React', ...scopeKeys, code + '; return React.createElement(BLOCKS_Container)')` - eval in the editor page, no iframe. Identity: babel-plugins/add-tuid-prop.js injects a `___uuid` string-literal attribute (constants.js `uuidName`) on every JSXOpeningElement (skipping BLOCKS_* internals); pragma.js is a custom jsx pragma that strips `___uuid`, wraps every element with onClick -> `setCurrentElementId(id)` and onMouseEnter/Leave hover, and paints selection/hover as an inset boxShadow. Selection -> data: babel-plugins/get-current-element.js is a query plugin that walks the AST for the element whose `___uuid` matches `elementId` and fills {id, name, props (parsed from JSX attributes incl. the `sx` object), parentId, children | text}; get-element-tree.js and get-blocks-usage.js are similar AST queries. Mutations are one Babel plugin each (~20 in babel-plugins/, each with snapshot tests): apply-prop, apply-sx-prop, remove-sx-prop, replace-text, insert-before/after, insert-block, clone, remove, reorder-blocks, drag-and-drop; transforms.js exposes them as pure `(code, options) => code` functions. Property panel: property-controls/src/index.js defines ControlType {Boolean, Enum, Number, String, FusedNumber, Color, Image, File, ComponentInstance, Array, EventHandler, Style, Object} and `applyPropertyControls(Component, controls)` sets a static `Component.propertyControls`; @blocks/react components (e.g. headers/basic.js HeaderBasic with HeaderBasic.Logo/.Nav/.Link compound parts) declare their controls this way and the editor renders a form per control type and writes back via applyProp. Export: `toRawJSX` strips uuids (remove-tuid) and re-adds imports (add-block-imports). Undo/redo: none - code state is a plain useState; there is no history module.",
+  "core_innovation": "Code-as-document: the JSX source string is the canonical document and every editor operation is a pure, unit-testable Babel AST transform that preserves it as real code.",
+  "strengths": [
+    "Every operation is a pure `(code, options) => code` transform with snapshot tests - operations are composable, replayable and testable without a browser.",
+    "Stable element identity via an injected `___uuid` attribute survives re-renders and gives a trivial DOM-event -> source-node mapping through a custom jsx pragma.",
+    "Property controls as static, co-located component metadata (`Component.propertyControls`) with a small closed enum of control types.",
+    "@blocks/react shows a compact section library shaped as compound components (Header.Logo, Header.Nav) driven by theme-ui variants - a slot vocabulary rather than free-form children.",
+    "Output is human-readable JSX/MDX, so there is no lock-in format."
+  ],
+  "weaknesses": [
+    "Abandoned since mid-2020 at alpha quality; Gatsby 2 / React 16 / Babel 7.10 / theme-ui 0.3 toolchain.",
+    "The document is an untyped code string: no schema, no validation, props parsed heuristically from JSX attributes (get-current-element.js only handles string literals and flat object expressions).",
+    "In-page `new Function` evaluation of transformed code (inline-render.js) - CSP-hostile, no iframe isolation, editor styles and page styles collide.",
+    "Every interaction re-parses and re-transforms the whole file with @babel/standalone in the browser - O(file) per click.",
+    "No undo/redo at all; no persistence layer; theme editing mutates theme-ui theme objects (free-form tokens).",
+    "Layout expressed via `sx` style props (free-form CSS) - a token-emitting surface, which our constraints forbid."
+  ],
+  "patterns_to_steal": [
+    "Stable-id injection pass (`___uuid` on every element at transform time) -> the Astro renderer stamps `data-sd-path` / `data-sd-id` on every section and editable field root from the SiteDefinition at build time, so a post-V1 overlay editor maps a click to a Zod path without runtime registries.",
+    "Operations as pure transforms over the canonical document, each with snapshot tests (babel-plugins/*.test.js) -> define editor and generator mutations as `(SiteDefinition, params) => SiteDefinition` pure functions with fixture tests; the same functions serve the Assembly stage and the future editor.",
+    "Static co-located property controls with a closed control-type enum -> attach UI hints to Zod fields (control type, options, min/max) via a small meta registry so panels are generated, never hand-built.",
+    "Compound-component slot vocabulary (Header.Logo/Nav/Link) -> section variants expose named slots with typed allowed content instead of arbitrary children."
+  ],
+  "patterns_to_avoid": [
+    "Code string as the document -> untyped, unvalidatable, and the model or human could write anything; SiteDefinition must stay typed JSON that a renderer turns into code, never the reverse.",
+    "In-page eval of transformed code -> use an iframe/dev-server preview of the real Astro output.",
+    "Re-parsing the entire document per interaction -> operate on the JSON tree with patches.",
+    "`sx` / theme editing as the styling surface -> exposes raw tokens; only design_system_id and variant/arrangement ids are selectable."
+  ],
+  "reusable_patterns": [
+    "IdentityInjectionPass: a build-time pass that stamps every renderable node with a stable id attribute for DOM-to-source mapping.",
+    "PureDocumentTransforms: each edit is a pure function over the canonical document with snapshot-tested fixtures.",
+    "StaticPropertyControls: component-attached, enum-typed control descriptors that drive generated property panels.",
+    "CompoundSlotComponents: sections expose named sub-components as the only extension points."
+  ],
+  "adoption_strategy": "Ignore as a codebase - it is a 2020 alpha with no undo, no types, in-page eval and a dead toolchain. The two ideas worth keeping are already cheap to implement natively: stamp `data-sd-path` ids in the Astro renderer (the `___uuid` idea done at the right layer) and write every SiteDefinition mutation as a snapshot-tested pure function (the babel-plugin-per-operation idea without Babel). Nothing here should influence the section library beyond the reminder that compound slot components beat free-form children.",
+  "recommendation": "Ignore",
+  "novelty_score": 6,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": [
+    "visual_editor",
+    "renderer",
+    "assembly"
+  ],
+  "evidence": [
+    "git log master: last commit 2020-06-26 'Merge pull request #302'; gh api branches: master plus renovate/* bot branches only",
+    "readme.md: 'Blocks is in very early alpha so many features are missing and it's not yet fully functional'",
+    "packages/blocks-ui/package.json: blocks-ui 0.0.79, deps @babel/standalone, @babel/traverse, @babel/template, theme-ui 0.3.1, @monaco-editor/react, react-beautiful-dnd fork",
+    "packages/blocks-ui/src/transforms.js: toTransformedJSX plugin chain, toRawJSX, addTuid, applyProp, replaceText, insertElementBefore/After, cloneElement, removeElement, reorderJSXBlocks, insertJSXBlock",
+    "packages/blocks-ui/src/babel-plugins/add-tuid-prop.js: injects ___uuid on JSXOpeningElement; constants.js uuidName = '___uuid'",
+    "packages/blocks-ui/src/babel-plugins/get-current-element.js: AST query by ___uuid producing {id, name, props, parentId, children|text}",
+    "packages/blocks-ui/src/pragma.js: custom jsx pragma reading ___uuid, injecting onClick/hover and selection boxShadow",
+    "packages/blocks-ui/src/inline-render.js: new Function('React', ...scope, code) evaluation, no iframe",
+    "packages/blocks-ui/src/providers/code.js: useState codeState; no undo/history anywhere in providers/",
+    "packages/property-controls/src/index.js: ControlType enum, applyPropertyControls",
+    "packages/react/src/headers/basic.js: HeaderBasic with .Logo/.Nav/.Link and applyPropertyControls(HeaderBasic, {justifyContent: Enum, sx: Style})",
+    "babel-plugins/__snapshots__ and *.test.js per plugin"
+  ]
+}

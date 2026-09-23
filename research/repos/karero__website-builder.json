@@ -1,0 +1,57 @@
+{
+  "repo": "karero/website-builder",
+  "url": "https://github.com/karero/website-builder",
+  "category": "strategy-doc-extra (agent skill suite)",
+  "license": "MIT",
+  "stars": 4,
+  "last_push": "2026-09-22",
+  "status_note": "active, single-maintainer, tiny audience; cited in implementation-strategy.md",
+  "core_problem": "Turn a short brief into a complete, SEO/GEO-ready, accessible Astro website by orchestrating an AI coding assistant (Claude Code / Codex / Antigravity) through a fixed sequence of skills, with quality gates, on a house stack of Astro -> GitHub -> Cloudflare Pages.",
+  "architecture": "No runtime code of its own: the product is ~30 SKILL.md files under skills/ (ai-seo, business-listings-setup, copywriting, customer-research, image, independent-review, internal-link-audit, keystatic-setup, new-website, og-images, schema-markup, search-console-*, seo-audit, site-architecture, website-content-guide, website-design-system, website-motion, website-positioning, website-positioning-check, website-qa, website-review, website-seo-geo, website-testimonials, astro-i18n-setup...). new-website is the orchestrator: insights -> positioning -> content -> SEO/GEO -> design -> QA -> review -> launch. Skills carry references/ (playbooks, e.g. ai-seo/references/platform-ranking-factors.md, content-patterns.md) and evals/evals.json. Templates for the Astro scaffold live in skills/new-website/templates/. Repo tooling enforces hygiene: scripts/check_skill_budgets.sh (token budget per skill), check_model_agnostic.sh (skills must not depend on one vendor), check_template_coverage.sh, check_clean.sh; docs/reviews/ holds dozens of dated independent-review diffs, an audit trail of the suite reviewing its own changes. Sites are version-stamped with the suite version.",
+  "core_innovation": "The whole agency process is encoded as versioned, budgeted, model-agnostic skill files with an independent-review skill that reviews the suite's own changes: process-as-code rather than app-as-code.",
+  "strengths": [
+    "Pipeline shape matches ours almost exactly (positioning before design, QA and review as explicit stages, launch as a stage); validates the sequence.",
+    "Skill token budgets enforced by CI (check_skill_budgets.sh): a concrete answer to prompt bloat.",
+    "independent-review skill and docs/reviews/ trail: every change to the process gets a written review; maps to our 'drift review is a diff, not a write' rule.",
+    "Version stamping of built sites: the same idea as pinning library@commit in the manifest.",
+    "website-positioning-check exists as a separate skill from website-positioning: verification split from authoring.",
+    "Astro house stack independently chosen; keystatic-setup shows a git-backed CMS path for client edits without a database.",
+    "Search Console / business listings skills: post-launch measurement and local-SEO setup are treated as part of building the site."
+  ],
+  "weaknesses": [
+    "Everything is prose instructions to a model; nothing is deterministic code. Quality depends entirely on the model following the SKILL.md; there is no gate that can fail a build.",
+    "No fact registry, no grounding leash: content is whatever the model writes from the brief.",
+    "No design library; 'design' is a skill describing principles, so output is model-invented layout, precisely the slop path.",
+    "4 stars, one maintainer; not a dependency, only a reference.",
+    "Positioning is elicited conversationally rather than declared as a typed value with honesty constraints."
+  ],
+  "patterns_to_steal": [
+    "Stage list and ordering (insights -> positioning -> content -> SEO/GEO -> design -> QA -> review -> launch) -> confirms our selection pipeline; add their post-launch stages (search console, listings) to our launch checklist.",
+    "Skill/asset token budgets enforced in CI -> apply to playbooks, design systems and prompts: a playbook YAML over N tokens fails CI.",
+    "Model-agnostic check -> our three constrained calls should be tested against at least two providers so the pipeline is not vendor-shaped.",
+    "Dated review documents for every process change -> our /_proposed/<asset>@<date>.yml drift-review outputs should keep a review log alongside.",
+    "Version-stamp the site with library/playbook/design-system versions in a meta tag or build manifest served alongside the site."
+  ],
+  "patterns_to_avoid": [
+    "Process-as-prose only -> cannot gate; our invariants must be code.",
+    "Conversational design decisions -> model invents layouts; we select authored arrangements.",
+    "Content generated without a fact registry -> unverifiable claims."
+  ],
+  "reusable_patterns": [
+    "ProcessAsVersionedSkills: an agency workflow encoded as versioned instruction files with CI hygiene checks.",
+    "BudgetedPrompts: per-asset token ceilings enforced in CI.",
+    "SelfReviewTrail: every change to process assets produces a dated independent review artifact.",
+    "VersionStampedOutput: built sites record which process version built them."
+  ],
+  "adoption_strategy": "Adapt. Take the stage ordering as confirmation, the CI hygiene scripts as a pattern for our YAML assets, and the post-launch SEO stages as checklist items. Do not adopt the skills themselves; they are prose where we need code.",
+  "recommendation": "Adapt",
+  "novelty_score": 4,
+  "difficulty_score": 1,
+  "pipeline_stages_affected": ["agent_orchestration", "playbooks", "qa_gate", "launch", "seo"],
+  "evidence": [
+    "skills/*/SKILL.md list (30 skills) from repo tree",
+    "scripts/check_skill_budgets.sh, check_model_agnostic.sh, check_template_coverage.sh",
+    "docs/reviews/REVIEW-diff-*.md and RAW-diff-*.md (independent review trail)",
+    "README.md: pipeline insights -> positioning -> content -> SEO/GEO -> design -> QA -> review -> launch; house stack Astro -> GitHub -> Cloudflare Pages"
+  ]
+}

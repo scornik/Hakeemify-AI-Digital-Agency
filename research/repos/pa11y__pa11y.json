@@ -1,0 +1,64 @@
+{
+  "repo": "pa11y/pa11y",
+  "url": "https://github.com/pa11y/pa11y",
+  "category": "quality",
+  "license": "LGPL-3.0-only",
+  "stars": 4537,
+  "last_push": "2026-09-21",
+  "status_note": "active; v10.0.0 (Puppeteer 25, axe-core ~4.13, @pa11y/html_codesniffer 2.6 fork); sibling pa11y/pa11y-ci (LGPL-3.0, 633 stars, pushed 2026-09-13) provides sitemap/URL-list batch runs",
+  "core_problem": "A Puppeteer-driven CLI and Node API that loads a URL, optionally performs a scripted list of pre-test actions, injects one or more in-page accessibility engines (HTML_CodeSniffer by default, axe optional), and normalizes their output into a single flat issue list with error/warning/notice levels, a threshold and exit code for CI.",
+  "architecture": "lib/pa11y.js orchestrates a fixed sequence: option.parseArguments (defaults: standard WCAG2AA, runners ['htmlcs'], timeout 60000, viewport 1280x1024, includeNotices/includeWarnings false, levelCapWhenNeedsReview 'error', wait 0) -> setBrowser (puppeteer.launch(chromeLaunchConfig) or a caller-supplied browser/page) -> setPage (viewport, userAgent, console forwarding) -> interceptRequests (only if headers/method/postData) -> gotoUrl (waitUntil networkidle2, or ignoreUrl to audit an already-navigated page) -> runActionsList -> injectRunners (lib/runner.js + each runner's scripts via page.evaluate) -> wait -> runPa11yWithOptions -> saveScreenCapture. lib/runner.js is the in-page aggregator exposed as window.__pa11y: runs each named runner, filters issues by rootElement / hideElements / ignore (codes or types), and maps each to {code, type error|warning|notice, typeCode 1|2|3, message, context (outerHTML truncated to 250 chars, innerHTML to 31), selector (id-anchored 'tag:nth-child' path), runner, runnerExtras}. Runners are plugins {scripts: [paths injected], run(options, pa11y), supports: semver}: lib/runners/htmlcs.js calls HTMLCS.process(standard, document) with standard WCAG2A|WCAG2AA|WCAG2AAA and optional extra sniff 'rules', mapping HTMLCS type 1/2/3 to error/warning/notice; lib/runners/axe.js calls axe.run(rootElement||document, {runOnly: {type:'tags', values:['wcag2a','wcag21a', +'wcag2aa','wcag21aa' unless WCAG2A, 'best-practice']}, rules: enable/disable map derived from pa11y rules/ignore}) and maps impact critical|serious -> error, moderate -> warning, minor -> notice; crucially it emits axe 'incomplete' results as issues with runnerExtras.needsFurtherReview = true, capped to levelCapWhenNeedsReview. lib/action.js is a regex-matched DSL run before testing: 'navigate to <url>', 'click element <sel>', 'set field <sel> to <val>', 'clear field', 'check|uncheck field', 'screen capture <file>', 'wait for url|path|fragment|host to (not) be <x>', 'wait for element <sel> to be added|removed|visible|hidden', 'wait for element <sel> to emit <event>'. Reporters (lib/reporters): cli, csv, tsv, json, html (mustache template). CLI (bin/pa11y.js): --runner, --standard, --threshold N (exit 2 if issues > N), --level, --level-cap-when-needs-review, --ignore, --add-rule, --root-element, --hide-elements, --config JSON. pa11y-ci: lib/pa11y-ci.js runs an async queue (concurrency default 1, useIncognitoBrowserContext true) over 'urls' (each a string or {url, ...overrides, threshold}) or a --sitemap (recurses sitemapindex, --sitemap-find/--sitemap-replace to rewrite hosts, --sitemap-exclude regex), cycles reporters through beforeAll/begin/results/error/afterAll, and exits 2 when errors >= threshold.",
+  "core_innovation": "Runner abstraction that normalizes heterogeneous a11y engines into one issue schema, plus a plain-English pre-test action DSL so page state can be set up without writing browser code.",
+  "strengths": [
+    "Dual engines: HTML_CodeSniffer catches some WCAG techniques axe does not express (and WCAG2AAA sniffs), giving a cheap second opinion on the same DOM.",
+    "Needs-review policy is explicit: axe incomplete results are surfaced as issues (needsFurtherReview true) and their level is capped by levelCapWhenNeedsReview, so 'unknown' is never silently dropped - the same fail-closed posture our gate wants.",
+    "Issue schema is tiny and stable (code/type/message/context/selector/runner) and identical across engines; trivially mapped into a GateReport.",
+    "Action DSL is human-readable and validatable (pa11y.isValidAction), suitable for authoring per-archetype pre-conditions in YAML.",
+    "pa11y-ci provides sitemap-driven batch runs with per-URL threshold overrides and a minimal reporter lifecycle contract.",
+    "Accepts an external Puppeteer browser/page (browser + page + ignoreUrl), so it can run on a page another script already navigated."
+  ],
+  "weaknesses": [
+    "LGPL-3.0-only: acceptable for unmodified use as a CLI or npm dependency in a closed SaaS (LGPL section 4 applies to combined works; dynamic linking/consumption via npm is customary), but any modification to pa11y's own source must be published, and some enterprise clients flag LGPL in dependency audits. Nothing here is worth that friction.",
+    "Puppeteer, not Playwright: a second browser driver and Chrome download in our stack, with its own lifecycle, for a job Playwright + @axe-core/playwright already does.",
+    "HTML_CodeSniffer is a legacy engine (pa11y's own fork, minor updates), noisy notices, and its WCAG 2.1 mapping is partial; its unique value versus axe is small for modern semantic HTML that our section library controls.",
+    "Flattens axe's rich result: any/all/none check data, relatedNodes, tags and helpUrl are lost or squashed into message text; impact->level mapping discards 'incomplete' as a distinct status (only a boolean in runnerExtras).",
+    "Selector generation (id-anchored nth-child path) is weaker than axe's own target arrays and does not traverse iframes or shadow DOM.",
+    "Per-page tool; pa11y-ci has no route sampling, no dedupe, no cross-page checks, and threshold is a plain count rather than severity-weighted.",
+    "Runs with a desktop 1280x1024 viewport by default; no built-in multi-viewport runs, no throttling, no performance or SEO checks."
+  ],
+  "patterns_to_steal": [
+    "Needs-review cap (levelCapWhenNeedsReview) -> qa_gate: policy knob that decides whether axe 'incomplete' nodes fail, warn or inform, defaulting to fail (error) for launch.",
+    "Action DSL grammar ('click element X', 'wait for element X to be visible', 'set field X to Y') -> qa_gate: author per page-archetype pre-test steps (open mobile nav, submit contact form, dismiss cookie banner) in YAML and compile them to Playwright calls; validate at load time like pa11y.isValidAction.",
+    "Runner plugin contract {scripts, run, supports} -> qa_gate: our in-page checks (placeholder scan, h1 count, generic link text) as runners that share the axe/HTMLCS injection path and result schema.",
+    "Uniform issue row {code, type, message, context, selector, runner} -> GateReport row baseline; add status (fail|warn|needs_review|pass|n/a), impact, tags, target[] and screenshot ref on top.",
+    "pa11y-ci urls entry as string | {url, overrides, threshold} -> qa_gate config: per-page overrides for pages with legitimately different rules (legal pages, thank-you page)."
+  ],
+  "patterns_to_avoid": [
+    "Adding pa11y as a dependency -> duplicates Playwright with Puppeteer, drags in LGPL, and loses axe result fidelity; run @axe-core/playwright directly.",
+    "HTML_CodeSniffer as a gate engine -> unmaintained mapping and noisy notices would create non-actionable failures; at most run it informative-only in research to spot gaps in our section library.",
+    "Count-based threshold ('permit N issues') -> we gate on severity classes and specific check ids, never on totals; a single critical is a fail, ten minors are warnings.",
+    "Default desktop-only viewport -> our checks must run at mobile 412x823 (Lighthouse's Moto G emulation) and desktop 1350x940 so target-size and contrast are evaluated where users see them."
+  ],
+  "reusable_patterns": [
+    "NeedsReviewSeverityCap: undecidable machine results are surfaced as issues with a configurable maximum severity, defaulting to fail-closed.",
+    "PlainEnglishActionDSL: regex-matched imperative sentences compiled to browser actions, validated before the run.",
+    "EngineRunnerPlugin: {scripts, run(options), supports} lets multiple in-page engines share injection, filtering and output schema.",
+    "PerUrlThresholdOverride: batch config where each URL can override defaults and its own pass threshold."
+  ],
+  "adoption_strategy": "Ignore as a dependency; Adapt two small patterns. Given Playwright + @axe-core/playwright are already in the stack, pa11y is redundant: its axe runner is a thin wrapper that loses data, and HTML_CodeSniffer adds little for semantic HTML we author ourselves. Take (1) the needs-review severity cap as a gate policy setting and (2) the action-sentence DSL for authoring pre-test steps per archetype in YAML, implemented over Playwright. Do not vendor its code (LGPL); the patterns are trivial to re-implement (~100 lines).",
+  "recommendation": "Ignore",
+  "novelty_score": 3,
+  "difficulty_score": 2,
+  "pipeline_stages_affected": ["qa_gate"],
+  "evidence": [
+    "lib/pa11y.js (runPa11yTest sequence setBrowser/setPage/interceptRequests/gotoUrl/runActionsList/injectRunners/wait/runPa11yWithOptions/saveScreenCapture; pa11y.defaults incl. standard WCAG2AA, runners ['htmlcs'], timeout 60000, levelCapWhenNeedsReview 'error'; allowedStandards WCAG2A/AA/AAA)",
+    "lib/runner.js (window.__pa11y run(): runners map, processIssues with rootElement/hideElements/ignore filters, issue shape code/type/typeCode/message/context/selector/runner/runnerExtras, getElementContext 250/31 char truncation, id-anchored selector builder)",
+    "lib/runners/axe.js (runOnly tags wcag2a/wcag21a/wcag2aa/wcag21aa/best-practice; impact->level map critical/serious=error moderate=warning minor=notice; incomplete emitted with needsFurtherReview=true and capped by levelCapWhenNeedsReview; supports '^10.0.0')",
+    "lib/runners/htmlcs.js (HTMLCS.process(standard, document), extra sniff rules pushed into HTMLCS_<standard>.sniffs[0].include, type 1/2/3 mapping)",
+    "lib/action.js (action regexes: navigate-url, click-element, set-field-value, clear-field-value, check-field, screen-capture, wait-for-url, wait-for-element-state, wait-for-element-event)",
+    "lib/option.js (parseArguments/defaultOptions: notices/warnings pushed onto ignore unless included; sanitizeUrl file:// handling)",
+    "lib/reporters/{cli,csv,tsv,json,html}.js, package.json (v10.0.0, LGPL-3.0-only, deps puppeteer ^25.9, axe-core ~4.13, @pa11y/html_codesniffer ^2.6)",
+    "README.md CLI options (--runner, --standard, --threshold, --level-cap-when-needs-review, --add-rule, --ignore, --root-element, --hide-elements)",
+    "pa11y/pa11y-ci README.md and lib/pa11y-ci.js, bin/pa11y-ci.js (urls/defaults config, concurrency queue, useIncognitoBrowserContext, --sitemap with sitemapindex recursion, --sitemap-find/--sitemap-replace/--sitemap-exclude, reporters beforeAll/begin/results/error/afterAll, exit 2 when errors >= threshold)"
+  ]
+}

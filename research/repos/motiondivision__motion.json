@@ -1,0 +1,71 @@
+{
+  "repo": "motiondivision/motion",
+  "url": "https://github.com/motiondivision/motion",
+  "category": "motion",
+  "license": "MIT (LICENSE.md); premium examples/APIs behind paid Motion+ are not in the repo",
+  "stars": 33698,
+  "last_push": "2026-09-22",
+  "status_note": "active; motion@13.4.1 (Framer Motion renamed; `motion/react` = Framer Motion, `motion` = vanilla)",
+  "core_problem": "One animation engine for React (declarative motion components, layout/shared-element animations, gestures) and vanilla JS (animate/scroll/inView), using a hybrid of WAAPI, native ScrollTimeline and a JS frameloop.",
+  "architecture": "Yarn/Lerna/Turbo monorepo, packages: framer-motion (React code, re-exported as motion/react), motion (thin re-exports: src/index.ts = `export * from 'framer-motion/dom'`, src/mini.ts = 'framer-motion/dom/mini', plus react, react-m, react-mini, three, vgpu, animate-view entries), motion-dom (vanilla engine: animation/{JSAnimation, NativeAnimation, GroupAnimation}, waapi/supports, generators/{spring,keyframes}, frameloop batcher, gestures/{hover,press}, view/ (View Transitions API wrapper), resize/), motion-utils (easings, pure helpers). Vanilla API (framer-motion/src/dom.ts): animate() (animation/animate/index.ts: createScopedAnimate with {scope, reduceMotion, skipAnimations}; picks NativeAnimation (WAAPI) when supportsWaapi and keyframes are compositor-friendly, else JSAnimation), animateMini (waapi/animate-style.ts, pure WAAPI, exported as animate from motion/mini), scroll() (render/dom/scroll/index.ts: attachToFunction or attachToAnimation; uses native ScrollTimeline/ViewTimeline when can-use-native-timeline.ts says supportsScrollTimeline(), else a rAF-driven scrollInfo tracker with offset presets), inView() (render/dom/viewport/index.ts: IntersectionObserver wrapper with amount:'some'|'all'|number and margin, onStart may return onEnd), stagger, spring generator. React-only: motion.* components, layout/shared-element animation via projection tree (projection/, MeasureLayout.tsx), AnimatePresence, useReducedMotion (utils/reduced-motion/use-reduced-motion.ts: lazily initialises a matchMedia listener from motion-dom's prefersReducedMotion, returns a snapshot state) and MotionConfig reducedMotion:'user'|'always'|'never' (use-reduced-motion-config.ts). Size discipline: framer-motion/package.json bundlesize gates (motion component 34.9 kB, m 6 kB, dom-animation 17.85 kB, dom-max 29.8 kB, animate 19.1 kB, scroll 5.2 kB, waapi-animate 2.26 kB gz) enforced by dev/inc/bundlesize.mjs and rollup.size.config.mjs; motion-dom gates style-effect 2.9 kB, motion-value 1.9 kB. Repo has AGENTS.md/CLAUDE.md/.cursorrules and a plans/ folder (e.g. 035-bundle-size-budget-enforcement.md).",
+  "core_innovation": "A hybrid engine that transparently chooses WAAPI/ScrollTimeline (compositor/off-main-thread) when the browser can, and falls back to a JS frameloop only when it must, behind one API for both vanilla and React.",
+  "strengths": [
+    "Vanilla entry needs no React: measured esbuild tree-shaken (min/gz) inView 1.0 kB/0.6 kB, scroll 17.7 kB/7.2 kB, motion/mini animate 10.9 kB/4.4 kB, full animate 59.5 kB/22.1 kB, animate+inView+scroll+stagger 67.7 kB/25.1 kB, mini+inView+scroll 26.9 kB/10.5 kB - the cheapest credible motion stack for Astro islands.",
+    "scroll() uses native CSS ScrollTimeline where supported, so scroll-linked effects cost ~0 main-thread; inView is a 0.6 kB IntersectionObserver wrapper.",
+    "createScopedAnimate({reduceMotion, skipAnimations}) is a build-time hook: a reduced-motion profile can be compiled as a scoped animate whose reduceMotion:true collapses transforms to opacity-only.",
+    "Per-entry gzipped bundlesize budgets enforced in CI; the repo even has a written plan for budget enforcement.",
+    "MIT, very active (pushed 2026-09-22), used by Framer, Cursor, Linear, Figma sites.",
+    "View Transitions wrapper (motion-dom/src/view) offers a standards-based route for page/section transitions with no React."
+  ],
+  "weaknesses": [
+    "Everything distinctive (layout animations, shared-element, AnimatePresence, drag, useReducedMotion hook, MotionConfig) is React-only (motion/react measured 126 kB/41.7 kB gz) - irrelevant for an Astro-first renderer that avoids React islands.",
+    "Full vanilla animate() is 22 kB gz because it pulls the JS keyframe resolver/spring; only motion/mini stays tiny, and mini cannot animate non-compositor values or independent transforms in older browsers.",
+    "No scroll pinning, scrub timeline with labels, text splitting, or FLIP for vanilla - the GSAP feature set that section arrangements (e.g. pinned comparison, line reveals) need is absent.",
+    "useReducedMotion snapshots on first render and does not update live (TODO in source); vanilla users must call initPrefersReducedMotion/prefersReducedMotion themselves.",
+    "Commercial Motion+ layer (examples, Cursor/Ticker APIs, 'AI skills') means the most polished patterns are paywalled and not in the repo; the vanilla docs are thinner than the React docs.",
+    "1.6 GB repo (yarn cache and dev fixtures committed); reading source requires targeted API reads."
+  ],
+  "patterns_to_steal": [
+    "inView(el, onStart->onEnd, {amount, margin}) -> the single reveal primitive for the section library: assembly emits one inView per section with amount from composition.focal_weight; effect callbacks come from the effect registry -> motion / renderer.",
+    "can-use-native-timeline -> gate scroll-linked patterns on supportsScrollTimeline() at runtime and prefer CSS animation-timeline:scroll() emitted statically by Astro; JS scroll() only as fallback -> motion / renderer.",
+    "createScopedAnimate({reduceMotion, skipAnimations}) -> compile motion profile.reduced_motion_fallback in {'opacity_only','none'} to a scoped animate instance per page -> motion.",
+    "bundlesize per entry + rollup.size.config 'size-rollup-*' entries -> mirror for our effect registry: each pattern id declares max gz bytes; CI fails the anti-slop/QA gate if exceeded -> qa_gate.",
+    "MotionConfig reducedMotion:'user'|'always'|'never' tri-state -> adopt the same enum in the SiteDefinition motion profile (never 'never' for launch QA) -> design_system / a11y."
+  ],
+  "patterns_to_avoid": [
+    "motion/react layout/shared-element animations -> require React islands and a projection tree; cost 40+ kB gz and hydrate whole sections; contradicts near-zero JS Astro.",
+    "AnimatePresence-style exit animations for marketing sections -> nothing exits on a static page; pure decoration.",
+    "Full `animate` from 'motion' for simple reveals -> 22 kB gz where motion/mini (4.4 kB) or CSS does the same.",
+    "Motion+ 'AI skills' / prompt-driven animation authoring -> model-written animation code violates 'selection not generation'."
+  ],
+  "reusable_patterns": [
+    "HybridEngineSelection: pick native (WAAPI/ScrollTimeline) vs JS animation per keyframe set at runtime via feature detection.",
+    "ScopedAnimateFactory: an animate() factory closed over policy flags (reduceMotion, skipAnimations, scope) so callers cannot bypass them.",
+    "IntersectionRevealPrimitive: inView returning an optional onEnd, enabling enter/exit symmetry without state.",
+    "EntrySizeBudgetCI: rollup 'size-*' entries measured gzipped and compared to package.json maxSize."
+  ],
+  "adoption_strategy": "Adapt (adopt the vanilla subset). Use `motion/mini` + `inView` (+ `scroll` only when a section needs JS scroll-linking) as the default lightweight tier (~10.5 kB gz measured) for the majority of section families whose motion is 'reveal once' or 'scroll-linked opacity/transform'; reserve GSAP for the small set of arrangements that need pinning, timelines or SplitText. Never ship motion/react. Copy the scoped-animate-with-policy and per-entry size-budget mechanisms into our effect registry.",
+  "recommendation": "Adapt",
+  "novelty_score": 6,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": [
+    "motion",
+    "renderer",
+    "qa_gate",
+    "design_system"
+  ],
+  "evidence": [
+    "raw/motiondivision_motion/meta.json, README.md (packages, Motion+)",
+    "gh api packages/motion/package.json (exports: ., mini, react, react-mini, three, vgpu, animate-view; peer react optional)",
+    "packages/motion/src/index.ts and mini.ts (re-exports of framer-motion/dom and /dom/mini)",
+    "packages/framer-motion/src/dom.ts (vanilla surface: animate, animateMini, scroll, scrollInfo, inView, delay)",
+    "packages/framer-motion/src/animation/animate/index.ts (createScopedAnimate {scope, reduceMotion, skipAnimations})",
+    "packages/framer-motion/src/animation/animators/waapi/animate-style.ts (animateMini = pure WAAPI)",
+    "packages/framer-motion/src/render/dom/scroll/index.ts and utils/can-use-native-timeline.ts",
+    "packages/framer-motion/src/render/dom/viewport/index.ts (inView IntersectionObserver)",
+    "packages/framer-motion/src/utils/reduced-motion/use-reduced-motion.ts and use-reduced-motion-config.ts",
+    "packages/framer-motion/package.json bundlesize array; packages/motion-dom/package.json bundlesize; dev/inc/bundlesize.mjs; rollup.size.config.mjs",
+    "AGENTS.md package roles; plans/035-bundle-size-budget-enforcement.md (path)",
+    "esbuild measurements e_motion_* in scratchpad/bundle (motion@13.4.1)"
+  ]
+}

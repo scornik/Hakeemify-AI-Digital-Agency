@@ -1,0 +1,76 @@
+{
+  "repo": "microsoft/playwright",
+  "url": "https://github.com/microsoft/playwright",
+  "category": "browser-qa",
+  "license": "Apache-2.0",
+  "stars": 96543,
+  "last_push": "2026-09-23",
+  "status_note": "active; v1.64.0-next on main; monorepo also ships @playwright/mcp (microsoft/playwright-mcp, 37.5k stars, Apache-2.0, pushed 2026-09-18) and @playwright/cli as agent-facing front-ends",
+  "core_problem": "Drive Chromium/Firefox/WebKit through one API with auto-waiting locators, and run tests in isolated contexts with a runner that carries fixtures, a project (device) matrix, retrying web-first assertions, pixel and ARIA snapshot comparison, tracing and pluggable reporters.",
+  "architecture": "Monorepo under packages/*: playwright-core (server/ drivers over CDP/Juggler/WebKit protocol; server/screenshotter.ts does in-page prep: inject stylePath CSS, hide caret, disable/sync animations, mask locators with #F0F, then captures until two consecutive screenshots match), injected/ (scripts evaluated in the page: ariaSnapshot.ts builds the ARIA tree, ariaSnapshotDistiller.ts is a babel-style visitor chain that removes/unwraps nodes without losing refs), isomorphic/ariaSnapshot.ts (YAML-ish template parser: role, quoted-exact or /regex/ name, [level=], [checked], /url:, /children: equal|contain|deep-equal), playwright (the test runner: common/config.ts + configLoader.ts define TestConfig/TestProject/use options and snapshotPathTemplate; common/fixtures.ts + poolBuilder.ts implement test.extend() dependency-injected fixtures; runner/dispatcher.ts + processHost.ts run workers; matchers/toMatchSnapshot.ts implements both toMatchSnapshot and toHaveScreenshot with expected/actual/previous/diff file quartet, updateSnapshots modes all|changed|missing|none, maxDiffPixels and maxDiffPixelRatio combined via min(), comparator pixelmatch (threshold default 0.2) or ssim-cie94 from utils/comparators.ts; matchers/toMatchAriaSnapshot.ts diffs against a .aria.yml or inline template), reporters/ (json.ts, html.ts, blob.ts for sharded merge, junit, github, perfetto; all implement types/testReporter.d.ts Reporter with TestResult{status, errors, attachments[], steps[], annotations[]}), trace-viewer and html-reporter (web UIs reading trace.zip actions + DOM snapshots + network + console). Extension points: fixtures (worker- and test-scoped), projects with dependencies, custom reporters, expect.extend, page.route/context.route for network stubbing, page.emulateMedia for media features, page.on('console'|'pageerror'|'requestfailed'). @axe-core/playwright is a separate deque package that injects axe into the page and exposes AxeBuilder.withTags/include/exclude/disableRules/analyze(). Playwright MCP exposes browser_snapshot (accessibility tree with refs), browser_click(ref), browser_console_messages, browser_network_requests, opt-in --caps=testing browser_verify_* assertions, --caps=vision coordinate mode, --save-trace.",
+  "core_innovation": "Web-first, auto-retrying assertions over an accessibility-tree model of the page, plus a snapshot/trace pipeline that turns every check into reproducible artifacts (PNG quartet, ARIA YAML, trace.zip) rather than opinions.",
+  "strengths": [
+    "Deterministic gate primitives already exist: toHaveScreenshot (pixelmatch/ssim with numeric thresholds), toMatchAriaSnapshot (structural a11y assertion with regex and partial matching), page.route (block third-party / assert zero external requests), emulateMedia({reducedMotion:'reduce', colorScheme, forcedColors}), keyboard.press('Tab') + toBeFocused for tab order, page.on('console'/'pageerror') for zero-console-error checks.",
+    "Project matrix: projects[] with devices['Pixel 5'|'iPhone 12'|'Desktop Chrome'] and per-project use{} gives one spec file x N viewports/browsers with snapshot names templated by {projectName}/{platform}; project dependencies model setup-before-gate.",
+    "Screenshot stabilization is engineered, not ad hoc: stylePath injection, caret hide, animations disabled, masks, and capture-until-two-consecutive-identical; diff artifacts (expected/actual/previous/diff) attach to the report.",
+    "Reporter model is data-first: JSON reporter and the Reporter interface expose per-test status/errors/attachments/steps/annotations, which is exactly what a 60+ check gate report needs to be assembled from; blob reporter + merge-reports handles sharded runs.",
+    "trace.zip captures actions, DOM snapshots, network and console; it is the evidence bundle for a Gap Report or a fix loop.",
+    "Playwright MCP (accessibility snapshot with element refs, no vision needed) gives an LLM a token-cheap way to explore a generated site; --caps=testing adds verify_* tools; Apache-2.0 and Microsoft-maintained.",
+    "Apache-2.0, huge ecosystem, weekly releases, first-party TypeScript types; matches our Astro/TS stack with zero runtime bridge."
+  ],
+  "weaknesses": [
+    "Visual snapshots are platform-specific (fonts/rendering differ per OS/browser); baselines must be generated in the same container image as the gate or maxDiffPixelRatio has to be loosened until it means little.",
+    "Snapshots default to a previous-build baseline model (test-file-snapshots dir, --update-snapshots); nothing in the runner understands 'reference render per arrangement', so that layer is ours to build via snapshotPathTemplate and a custom fixture.",
+    "toHaveScreenshot is for full or clipped page pixels; it cannot express layout intent (approx_vh, focal_weight, density). Those need DOM-measurement assertions we write with locator.boundingBox() and page.evaluate.",
+    "ARIA snapshot format is Playwright-specific YAML, not a standard; it drifts across versions (distiller plugins change verbosity), so pin the version and regenerate reference snapshots on upgrade.",
+    "axe integration is third-party (@axe-core/playwright, MPL-2.0 for axe-core); axe only catches ~30-40% of WCAG issues automatically, so an axe-clean page is a floor not a certificate.",
+    "The runner is opinionated (worker processes, its own expect, config discovery); embedding it programmatically inside an agent pipeline means shelling out to `playwright test --reporter=json` and parsing, not calling a library function.",
+    "Monorepo is 240 MB; browser binaries add ~1 GB per browser; CI images must pre-bake mcr.microsoft.com/playwright to keep gate runs fast."
+  ],
+  "patterns_to_steal": [
+    "Project matrix (projects[] x devices[]) → qa_gate: one gate spec, projects = {desktop-chrome, mobile-safari(iPhone 12), tablet, reduced-motion(use: {reducedMotion:'reduce'}), dark(colorScheme:'dark')}; snapshotPathTemplate = '{testDir}/__refs__/{arg}/{projectName}{ext}'.",
+    "Reference-per-arrangement baselines → qa_gate + section library: at library authoring time render each arrangement (variant x arrangement x design_system_id) with fixture content and commit the PNG + .aria.yml as the reference; the gate compares the generated section against that reference with maxDiffPixelRatio tuned per arrangement (stored on the arrangement YAML as visual_tolerance) and masks for content slots (mask: [locator('[data-slot]')]).",
+    "toMatchAriaSnapshot with partial templates → qa_gate + anti_slop: each section variant carries an a11y template (heading level, landmark roles, link count, /url patterns) authored once; the generated page must contain it (/children: contain), which asserts structure without pixels.",
+    "expect/attachments/steps data model → decision manifest + gap report: run with reporter=[['json',{outputFile}],['html',{open:'never'}]], map every gate check to a test.step() so the JSON has 60+ named steps with status and attachments; the Gap Report is derived from failed steps, never narrated.",
+    "page.route + page.on('console'|'pageerror'|'requestfailed') → qa_gate: assert zero console errors, zero failed requests, zero requests to non-allowlisted origins (the 180 kB JS budget is enforced by summing response sizes of script requests via page.on('response')).",
+    "emulateMedia({reducedMotion:'reduce'}) + toHaveScreenshot → motion: the static poster fallback must be pixel-identical to the reference under reduced motion; also assert no element has running animations via page.evaluate(() => document.getAnimations().length).",
+    "Fixtures (test.extend) → qa_gate: a `site` fixture that boots the Astro preview server (webServer config), a `axe` fixture that pre-configures AxeBuilder.withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa']).exclude('[data-known-issue]'), a `refs` fixture that resolves the reference render path per arrangement id.",
+    "Playwright MCP accessibility snapshot → agent_orchestration (optional, warning-only): let a model explore the generated site via browser_snapshot/browser_click and emit friction notes; never let it gate, only feed the Gap Report as 'model observation'."
+  ],
+  "patterns_to_avoid": [
+    "Previous-build snapshot baselines (--update-snapshots after each build) → for generated sites every build is new, so the baseline must be the library-time reference render, not the last output; otherwise the gate rubber-stamps drift.",
+    "Loosening maxDiffPixelRatio globally to cope with font/OS differences → destroys the meaning of the check; instead pin the gate to one container image and generate references in the same image.",
+    "Full-page toHaveScreenshot as the only visual check → a single ratio hides which section broke; compare per-section locators with per-arrangement tolerances.",
+    "Vision-mode MCP (--caps=vision, coordinate clicks) → non-deterministic and token-heavy; accessibility snapshot mode only.",
+    "Using the trace viewer or HTML report as the artifact of record → they are for humans; the JSON reporter output (or a custom Reporter) is the machine artifact the Decision Manifest consumes."
+  ],
+  "reusable_patterns": [
+    "DeviceProjectMatrix: one spec, N projects each with a devices[] preset plus media emulation; snapshot names templated by project so references are per-device.",
+    "ReferenceRenderBaseline: visual regression baseline is a canonical render produced when the section library was authored, keyed by (arrangement_id, design_system_id, project), not the previous build.",
+    "StabilizedCapture: before pixel capture inject CSS, hide caret, disable animations, mask dynamic slots, capture until two consecutive frames match.",
+    "StructuralA11yTemplate: an authored partial ARIA-tree template per section variant asserted with contain semantics, decoupling structure checks from pixels.",
+    "StepAsCheck: every gate check is a named test.step with attachments so the reporter JSON is the gate report; failures map 1:1 to Gap Report lines.",
+    "NetworkAllowlistGate: page.route blocks and records every request; the gate asserts origin allowlist, zero failures, and byte budgets from response sizes."
+  ],
+  "adoption_strategy": "Adopt. Use @playwright/test directly as the Launch QA gate runtime: a single gate.spec.ts with projects for desktop/mobile/tablet/reduced-motion/dark, fixtures for the Astro preview server and AxeBuilder, per-section toHaveScreenshot against library-time reference renders (snapshotPathTemplate keyed on arrangement id and project), toMatchAriaSnapshot against per-variant structural templates, page.route/console/pageerror listeners for network and console cleanliness, and JSON reporter output parsed into the Decision Manifest and Gap Report. Pin the Playwright version and run the gate in the official mcr.microsoft.com/playwright image so references and actuals share fonts. Treat Playwright MCP as an optional warning-only explorer for the agentic 'act like a user' pass, never as a gate.",
+  "recommendation": "Adopt",
+  "novelty_score": 6,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": ["qa_gate", "motion", "anti_slop", "agent_orchestration", "design_system"],
+  "evidence": [
+    "packages/playwright/src/matchers/toMatchSnapshot.ts (SnapshotHelper: expectedPath/actualPath/previousPath/diffPath, updateSnapshots modes, maxDiffPixels validation, toHaveScreenshot options animations/caret/scale/stylePath/mask/maskColor/omitBackground/fullPage/clip, _expectScreenshot loop)",
+    "packages/utils/comparators.ts (getComparator by mime; pixelmatch threshold default 0.2; ssim-cie94 maxColorDeltaE94 1.0; maxDiffPixels = min(maxDiffPixels, ratio*area); size-mismatch padding)",
+    "packages/playwright-core/src/server/screenshotter.ts (inPagePrepareForScreenshots: screenshotStyle, hideCaret, disableAnimations, syncAnimations; mask fill #F0F)",
+    "packages/isomorphic/ariaSnapshot.ts and packages/injected/src/ariaSnapshotDistiller.ts (template kinds text/regex, /children equal|contain|deep-equal, /url, distiller visitor plugins)",
+    "packages/playwright/src/matchers/toMatchAriaSnapshot.ts",
+    "packages/playwright/types/testReporter.d.ts (TestResult.status/errors/attachments/steps/annotations; TestStep.category)",
+    "packages/playwright/src/reporters/{json,html,blob,junit,github,perfetto}.ts and runner/{dispatcher,processHost,projectUtils}.ts listing",
+    "docs/src/test-snapshots-js.md (two-consecutive-screenshot capture, {projectName}-{platform} naming, snapshotPathTemplate, stylePath, maxDiffPixels)",
+    "docs/src/test-projects-js.md (devices matrix, project dependencies, testMatch)",
+    "docs/src/accessibility-testing-js.md (AxeBuilder.withTags wcag2a/wcag2aa/wcag21a/wcag21aa, include/exclude/disableRules, violations attachment)",
+    "docs/src/emulation.md (devices registry deviceDescriptorsSource.json, viewport/deviceScaleFactor/colorScheme)",
+    "docs/src/test-reporters-js.md (json outputFile, html attachmentsBaseURL, blob + merge-reports, perfetto)",
+    "microsoft/playwright-mcp README.md (browser_snapshot accessibility-tree mode, browser_console_messages, browser_network_requests, --caps=testing browser_verify_*, --caps=vision, --isolated, --save-trace)",
+    "raw/microsoft_playwright/meta.json, package.json (1.64.0-next, workspaces packages/*), languages.json"
+  ]
+}

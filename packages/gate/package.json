@@ -1,0 +1,22 @@
+{
+  "name": "@ada/gate",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --build"
+  },
+  "dependencies": {
+    "@ada/contract": "workspace:*",
+    "zod": "4.6.5"
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "repo": "winchxyz/loupe",
+  "url": "https://github.com/winchxyz/loupe",
+  "category": "strategy-doc-extra (desktop AI website studio)",
+  "license": "MIT",
+  "stars": 13,
+  "last_push": "2026-08-06",
+  "status_note": "alpha v0.1, Windows-only, single maintainer; cited in implementation-strategy.md",
+  "core_problem": "AI web tools edit code blind and say 'done' when nothing rendered changed. Loupe closes the loop: point at an element on the live render, the agent edits source, and the change is verified against the real render before it reports success.",
+  "architecture": "Windows desktop app pairing an AI chat with a live design canvas. Build modes: Solo (one pass), Studio (Director -> Builder -> Reviewer with a clarify gate), experimental Swarm (planner maps site, parallel page builders, reviewer) and Loop (iterate a page against a quality bar). Grounding comes from baseline/library/: references/<n>/ (~1,300 analyses of real sites, each with extracted design tokens), recipes/ (DESIGN.md-style distilled palettes/type/composition/motion per source), techniques/ (how-tos: WebGL cross-fade, stacked-blur glass, perf tiers, sticky-pin responsive, GSAP choreography), snippets/ (lifted code from magic-ui, aceternity, shadcn, three.js examples, own builds), standards/ (design-standards precedence arbiter + verification playbook), INDEX.md (searchable tagged index). The library README documents a harvest pipeline: fetch page + assets via Playwright -> screenshots -> distill into recipe/techniques -> index. The element picker sends exact selectors + source files to the agent; a verify step diffs the real render. Canvas edits persist as CSS; one undo/redo stack spans AI and hand edits; /assemble compiles canvas arrangement into clean semantic HTML/CSS; a token panel stays in sync with the site's real CSS. BYOK engines: Claude, OpenRouter, OpenAI, Gemini, xAI, or subscription CLIs.",
+  "core_innovation": "Verify-the-render: an agent edit is not 'done' until the change is confirmed against the actual rendered DOM/pixels, with the element picker giving the agent exact selectors instead of a description.",
+  "strengths": [
+    "Verify-the-render loop is the right instinct and maps directly to our visual validation stage: never trust a code edit, trust the render.",
+    "Library structure (references / recipes / techniques / snippets / standards / INDEX) is a clean taxonomy for a design knowledge base; standards/ as a precedence arbiter is the interesting part.",
+    "Director -> Builder -> Reviewer with a clarify gate for vague briefs: a small, sane agent topology.",
+    "Unified undo/redo across AI and hand edits, and /assemble (canvas -> clean code) show the visual editor and the code output can stay in one model.",
+    "Design-token panel bound to the site's real CSS: tokens as the editable surface, not raw CSS."
+  ],
+  "weaknesses": [
+    "The ~1,300 reference analyses with extracted tokens are derivative of real commercial sites' trade dress; using them to generate sites sold to clients is a legal posture we explicitly rejected.",
+    "Fills image slots with AI-generated photos, which directly violates our non-overridable never: ai_generated_person / ai_generated_premises rule.",
+    "Snippets lifted from magic-ui/aceternity/three.js examples are the canonical slop vocabulary (beams, sparkles, orbiting circles).",
+    "Loop mode iterates against a quality bar judged by a model: the non-reproducible LLM critic we rejected.",
+    "Alpha, Windows-only, 13 stars, one maintainer; not a dependency.",
+    "Generation is free-form code editing; no typed site contract, no eligibility, no fact grounding."
+  ],
+  "patterns_to_steal": [
+    "Verify-the-render -> QA gate step: after any repair/substitution, re-render and assert the expected section/arrangement actually appears (DOM marker per section_instance_id + screenshot diff against the arrangement's library-time reference render).",
+    "Element picker -> post-V1 editor: selection resolves to a section_instance_id + slot, not a CSS selector; edits become SiteDefinition patches.",
+    "Library taxonomy (references/recipes/techniques/standards/INDEX) -> the shape of our authored library docs: each variant has a recipe (signature_move, negative_example), techniques are reusable implementation notes, standards are the precedence rules.",
+    "Clarify gate before building on a vague brief -> our intake refuses to start creative direction until positioning is declared and blocking facts exist (already in Gap Report blocking)."
+  ],
+  "patterns_to_avoid": [
+    "Harvested-site token corpus as generation grounding -> trade-dress risk and homogenisation; use hand-authored design systems.",
+    "AI-generated imagery for slots -> hard-banned by art direction rules.",
+    "Model-judged quality loop as a gate -> not reproducible; our loop iterates only against deterministic gate failures.",
+    "Snippet library from effect-component sites -> slop vocabulary."
+  ],
+  "reusable_patterns": [
+    "VerifyTheRender: an edit is complete only when the rendered output is checked, not when the code is written.",
+    "SelectorGroundedEdit: the editing agent receives exact structural references (ids/selectors + files), never a description.",
+    "KnowledgeLibraryTaxonomy: references / recipes / techniques / snippets / standards / index.",
+    "ClarifyGate: refuse to build on an underspecified brief."
+  ],
+  "adoption_strategy": "Adapt the verify-the-render loop and the library taxonomy; ignore the corpus, the imagery policy, and the model-judged loop. Nothing here is a dependency; the value is two mechanisms and one folder structure.",
+  "recommendation": "Adapt",
+  "novelty_score": 5,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": ["qa_gate", "visual_editor", "library_authoring", "intake"],
+  "evidence": [
+    "README.md Why / What it does: verify against real render, Studio Director->Builder->Reviewer, clarify gate, Swarm, Loop, ~1,300 analyses, AI-generated photos, /assemble, token panel",
+    "baseline/library/README.md: folder taxonomy and harvest pipeline",
+    "baseline/library tree: references/1..1289, snippets/{magic-ui, aceternity, shadcn, threejs-examples, our-builds}, recipes/, patterns/, standards"
+  ]
+}

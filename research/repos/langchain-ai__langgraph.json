@@ -1,0 +1,72 @@
+{
+  "repo": "langchain-ai/langgraph",
+  "url": "https://github.com/langchain-ai/langgraph",
+  "category": "agents",
+  "license": "MIT",
+  "stars": 42157,
+  "last_push": "2026-09-23",
+  "status_note": "active; Python monorepo (libs/langgraph, checkpoint, checkpoint-postgres, checkpoint-sqlite, prebuilt, cli, sdk-py). A first-party TypeScript port exists in langchain-ai/langgraphjs (@langchain/langgraph 1.4.x, MIT, pushed 2026-09-23) exporting StateGraph, Annotation, Send, Command, interrupt, MemorySaver plus checkpoint-postgres/sqlite/redis/mongodb packages.",
+  "core_problem": "Execute a graph of steps over an explicitly typed state with per-key reducers, checkpoint the state after every superstep so runs are durable, resumable, interruptible for human input, forkable (time travel) and fan-out capable, independent of whether a step is an LLM call or plain code.",
+  "architecture": "libs/langgraph/langgraph/graph/state.py `StateGraph(state_schema, context_schema, input_schema, output_schema)`: state is a TypedDict/pydantic/dataclass whose keys may be `Annotated[type, reducer]` (reducer signature (a, b) -> c, e.g. operator.add for lists); add_node (function or Runnable, with optional RetryPolicy/CachePolicy/destinations metadata), add_edge, add_conditional_edges(source, path_fn, path_map), add_sequence, compile(checkpointer, interrupt_before/after, store) -> CompiledStateGraph. Runtime is the Pregel model (pregel/main.py): each state key is a channel; a superstep runs all triggered nodes in parallel, collects writes, applies reducers, then persists a checkpoint. Checkpoint (libs/checkpoint/langgraph/checkpoint/base/__init__.py) is a TypedDict {v, id, ts, channel_values, channel_versions, versions_seen, updated_channels}; BaseCheckpointSaver has get_tuple/list/put/put_writes/delete_thread; implementations: MemorySaver, SqliteSaver, PostgresSaver (with a 'shallow' variant that keeps only the latest checkpoint per thread); keyed by thread_id and checkpoint_ns for subgraphs. Durability modes `sync|async|exit` (types.py) decide when checkpoints are written; `recursion_limit` (config, default 25 supersteps) raises GraphRecursionError. Control flow types (types.py): `Send(node, arg)` returned from a conditional edge dispatches N parallel invocations of one node with different inputs (map-reduce, results merged by a reducer); `Command(update=, goto=, resume=, graph=)` lets a node both write state and route, including to the parent graph; `interrupt(value, response_schema=)` raises GraphInterrupt, the checkpoint records the pending interrupt, and `invoke(Command(resume=...))` on the same thread_id re-enters the node with the human's value; `RetryPolicy(initial_interval, backoff_factor, max_attempts, retry_on)` and `CachePolicy(ttl)` are per node. Time travel: get_state, get_state_history (iterates checkpoints), update_state(config, values, as_node) forks a new checkpoint from any prior one; StateSnapshot carries values/next/tasks/interrupts. Subgraphs are compiled graphs used as nodes with their own checkpoint namespace. Streaming modes values/updates/checkpoints/tasks/messages/custom. The JS port mirrors this API (Annotation.Root for state schema, Zod schema support, same Send/Command/interrupt names).",
+  "core_innovation": "Treating agent execution as Pregel-style supersteps over reducer-typed channels, so that a checkpoint written after every step makes pause, resume, human interrupts, fan-out and forking into properties of the runtime rather than features bolted onto a loop.",
+  "strengths": [
+    "State schema is explicit and typed; reducers make concurrent writes deterministic (append vs overwrite is declared per key).",
+    "Checkpoint after every superstep, pluggable saver, and thread_id-based resumption make 'durable pipeline' the default, not extra work.",
+    "interrupt()/Command(resume=) is the cleanest human-in-the-loop primitive in the field: the node itself pauses, and the same code path resumes with the answer.",
+    "Send fan-out is exactly our per-section parallelism shape (N candidate beats -> N arrangement selections -> merged by reducer).",
+    "Time travel (update_state on a past checkpoint) enables re-running from 'arrangement selection' with a different playbook without re-doing research.",
+    "Deterministic nodes and LLM nodes are the same thing to the runtime; there is no requirement for an agent loop at all.",
+    "Available in TypeScript first-party with Postgres checkpointer; MIT."
+  ],
+  "weaknesses": [
+    "Dependency weight: @langchain/langgraph pulls @langchain/core; the checkpoint serde and Runnable abstractions are heavier than our pipeline needs.",
+    "recursion_limit defaults to 25 supersteps and counts all nodes; our linear pipeline needs explicit limits per model-call node, which LangGraph does not provide (no per-node cost budget; RetryPolicy is about exceptions, not validation failures).",
+    "No stuck detection or cost budget: you must implement both as state keys checked by conditional edges.",
+    "Postgres checkpointer stores full channel_values per checkpoint (the 'shallow' saver mitigates); for a SiteDefinition of a few hundred kB this grows fast without pruning.",
+    "The JS port lags the Python one in places and its API has churned (Annotation vs Zod schemas, v0 to v1); LangChain's release cadence is a maintenance tax.",
+    "Framework semantics (channels, versions_seen, namespaces) are non-trivial to debug when something misbehaves; a hand-rolled 12-stage machine is simpler to reason about."
+  ],
+  "patterns_to_steal": [
+    "Explicit state schema with per-key reducers -> agent_orchestration: define PipelineState as a Zod object (facts, eligibility_snapshot, playbook_id, positioning, creative_direction, beats[], arrangements[], site_definition, gate_results[], manifest) where list keys use an append reducer and scalar keys are overwrite-only; the Decision Manifest is derived from the snapshot.",
+    "Checkpoint-after-every-node keyed by thread_id + checkpoint_ns -> agent_orchestration: one Postgres row per (run_id, stage) holding the state snapshot; resuming a failed Lighthouse gate restarts at that stage.",
+    "interrupt(value) / Command(resume=) -> gap_report and owner-declared positioning: the pipeline literally pauses inside the positioning node until the owner declares; no polling flags.",
+    "Send(node, arg) fan-out with reducer merge -> beat_selection/arrangement: dispatch one constrained model call per section family in parallel and merge results by section id.",
+    "update_state on a prior checkpoint (time travel) -> telemetry / priors experiments: re-run from creative direction with a promoted prior and diff the resulting SiteDefinition against the original.",
+    "Per-node RetryPolicy(retry_on=...) with backoff -> the three model-call nodes and the Playwright/Lighthouse nodes (transient failures) get retry policies; validation failures are handled by the guardrail loop, not RetryPolicy."
+  ],
+  "patterns_to_avoid": [
+    "Using the prebuilt ReAct agent (create_react_agent) or tool-calling loops -> our model calls select ids from eligible sets, they never call tools.",
+    "Cycles in the graph for 'self-improvement' (generate -> critique -> regenerate loops driven by an LLM judge) -> the fix loop is driven by deterministic gate results, bounded, and never by a model score.",
+    "Storing the full SiteDefinition in every checkpoint without pruning -> use shallow checkpoints plus an event log, keep large blobs in object storage referenced by hash.",
+    "Letting the graph structure be dynamic (Command(goto=) computed by a model) -> routing must be decided by code from predicate snapshots."
+  ],
+  "reusable_patterns": [
+    "ReducerTypedState: each state key declares how concurrent/successive writes merge, making the state machine deterministic under parallelism.",
+    "SuperstepCheckpointing: persist a versioned snapshot after every node so any run can be resumed or forked from any step.",
+    "InterruptResume: a node can suspend the whole run with a payload and is re-entered with the human's response on the same thread id.",
+    "SendFanOut: a conditional edge returns N Send(node, input) objects to run a node N times in parallel, merged by reducers.",
+    "TimeTravelFork: writing to a historical checkpoint creates a new branch of execution without mutating history.",
+    "RecursionCeiling: a global superstep limit raises a typed error to prevent runaway graphs."
+  ],
+  "adoption_strategy": "Adapt, with Adopt as a legitimate option. Honest sizing: our pipeline is a linear DAG of ~12 deterministic stages with 3 constrained model calls plus copy generation, one owner interrupt (positioning) and one fan-out (per-section selection). A hand-rolled TS state machine (Zod PipelineState, `stages: Stage[]` array, Postgres `run_checkpoints(run_id, stage, state jsonb, version)`, an `await waitForOwner()` implemented as status=WAITING + resume endpoint) is roughly 300-500 lines and has zero framework semantics to debug; that is the recommended V1. If the team prefers not to own resumption/fan-out code, `@langchain/langgraph` + `@langchain/langgraph-checkpoint-postgres` is the only framework in this batch that is TypeScript-native, MIT and matches our shape; use only StateGraph/Annotation/Send/interrupt/Command, never the prebuilt agents. Either way, copy the checkpoint schema (versioned snapshot per superstep with versions_seen) and the interrupt/resume contract exactly. A full agent framework is not warranted; a checkpointed state machine is enough.",
+  "recommendation": "Adapt",
+  "novelty_score": 7,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": [
+    "agent_orchestration",
+    "gap_report",
+    "positioning",
+    "beat_selection",
+    "arrangement",
+    "qa_gate",
+    "telemetry"
+  ],
+  "evidence": [
+    "libs/langgraph/langgraph/graph/state.py (StateGraph, Annotated reducer docs and validation, add_node/add_edge/add_conditional_edges/add_sequence/compile, CompiledStateGraph)",
+    "libs/langgraph/langgraph/types.py (Durability sync|async|exit, RetryPolicy, CachePolicy, Interrupt, StateSnapshot, Send, Command(update/resume/goto/graph), interrupt(value, response_schema))",
+    "libs/checkpoint/langgraph/checkpoint/base/__init__.py (Checkpoint TypedDict v/id/ts/channel_values/channel_versions/versions_seen/updated_channels; BaseCheckpointSaver get_tuple/list/put/put_writes/delete_thread)",
+    "libs/checkpoint-postgres/langgraph/checkpoint/postgres/{base,shallow,aio}.py; libs/checkpoint-sqlite",
+    "libs/langgraph/langgraph/pregel/main.py (recursion_limit validation, GraphRecursionError, durability, get_state/get_state_history/update_state/bulk_update_state)",
+    "langchain-ai/langgraphjs libs/langgraph-core/package.json (@langchain/langgraph 1.4.18-rc.0) and src/web.ts exports (StateGraph, Annotation, Send, Command, interrupt, isInterrupted, MemorySaver); libs/checkpoint-postgres, checkpoint-sqlite, checkpoint-redis, checkpoint-mongodb"
+  ]
+}

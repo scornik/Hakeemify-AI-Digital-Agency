@@ -1,0 +1,400 @@
+.github
+.github/CODE_OF_CONDUCT.md
+.github/CONTRIBUTING.md
+.github/FUNDING.yml
+.github/ISSUE_TEMPLATE
+.github/ISSUE_TEMPLATE/bug_report.md
+.github/ISSUE_TEMPLATE/config.yml
+.gitignore
+ATTRIBUTION.md
+FEATURES.md
+LICENSE
+README.md
+THIRD-PARTY-NOTICES.md
+app
+app/.gitignore
+app/STAGE1.md
+app/agents
+app/agents/README.md
+app/agents/art-director.md
+app/agents/builder.md
+app/agents/critic.md
+app/agents/enforcer.md
+app/agents/reviewer.md
+app/brand
+app/brand/DESIGN.md
+app/brand/loupe-app-icon.svg
+app/brand/loupe-favicon.svg
+app/brand/loupe-icon-256.png
+app/brand/loupe-icon-512.png
+app/brand/loupe-icon.ico
+app/brand/loupe-mark-dark.svg
+app/brand/loupe-mark-mono.svg
+app/brand/loupe-mark.svg
+app/brand/render-icon.mjs
+app/build
+app/build/installer.nsh
+app/build/installerHeader.bmp
+app/build/installerSidebar.bmp
+app/electron
+app/electron/agent.cjs
+app/electron/artdirection.cjs
+app/electron/assetsource.cjs
+app/electron/bridges.cjs
+app/electron/buildintent.cjs
+app/electron/childenv.cjs
+app/electron/flow.cjs
+app/electron/flowlog.cjs
+app/electron/grounding.cjs
+app/electron/imagery.cjs
+app/electron/imagesource.cjs
+app/electron/library.cjs
+app/electron/main.cjs
+app/electron/nethost.cjs
+app/electron/palette.cjs
+app/electron/paths.cjs
+app/electron/preload.cjs
+app/electron/project.cjs
+app/electron/promptlang.cjs
+app/electron/providers.cjs
+app/electron/references.cjs
+app/electron/reviewnote.cjs
+app/electron/safepath.cjs
+app/electron/starter.cjs
+app/index.html
+app/package-lock.json
+app/package.json
+app/scripts
+app/scripts/distill-taste-priors.cjs
+app/scripts/make-ico.mjs
+app/scripts/make-installer-art.cjs
+app/shared
+app/shared/imagery-ask.json
+app/shared/picker.js
+app/src
+app/src/App.jsx
+app/src/assets
+app/src/assets/fonts
+app/src/assets/fonts/press-start-2p.woff2
+app/src/assets/uc-lite.mp4
+app/src/main.jsx
+app/src/styles.css
+app/test
+app/test/README.md
+app/test/_harness.mjs
+app/test/audit-livebuild-probe.mjs
+app/test/fixture-site
+app/test/fixture-site/.dezign-verify.png
+app/test/fixture-site/about.html
+app/test/fixture-site/contact.html
+app/test/fixture-site/dezign-edits.css
+app/test/fixture-site/index.html
+app/test/fixture-site/palette.html
+app/test/fixture-site/styles.css
+app/test/fixture-site/svhtest.html
+app/test/p5-baremode-probe.mjs
+app/test/r2-editor-probe.mjs
+app/test/r2-f1-proof-probe.mjs
+app/test/r2-flow-g1-probe.mjs
+app/test/r2-flow-g2-probe.mjs
+app/test/r2-flow-g3-probe.mjs
+app/test/r2-flow-g4-probe.mjs
+app/test/r2-flow-g5-probe.mjs
+app/test/r2-freshuser-probe.mjs
+app/test/r2-liveconfirm-probe.mjs
+app/test/r2-scale-probe.mjs
+app/test/r2-shots-probe.mjs
+app/test/r2-visualqa-probe.mjs
+app/test/r2-watcher-crash-probe.mjs
+app/test/r3-dev-diag.mjs
+app/test/r3-diag-probe.mjs
+app/test/r3-newflow-probe.mjs
+app/test/r3-packaged-probe.mjs
+app/test/r3-shot.mjs
+app/test/refsite-probe.mjs
+app/test/smoke.mjs
+app/vite.config.js
+baseline
+baseline/library
+baseline/library/INDEX.md
+baseline/library/README.md
+baseline/library/asset-sources.md
+baseline/library/component-sources.md
+baseline/library/inspiration-sources.md
+baseline/library/patterns
+baseline/library/patterns/bento-span-choreography.md
+baseline/library/patterns/diagram-as-layout.md
+baseline/library/patterns/kinetic-type-marquee.md
+baseline/library/patterns/numeral-rail.md
+baseline/library/patterns/poster-scroll.md
+baseline/library/patterns/scroll-dwell-sequence.md
+baseline/library/patterns/self-demonstrating-hero.md
+baseline/library/patterns/split-discipline.md
+baseline/library/recipes
+baseline/library/recipes/.gitkeep
+baseline/library/recipes/hyperodds.md
+baseline/library/recipes/ref-2019-bruno-simon.md
+baseline/library/recipes/ref-chartogne-taillet.md
+baseline/library/recipes/ref-cipher-digital.md
+baseline/library/recipes/ref-clapat-hayler.md
+baseline/library/recipes/ref-crav-burgers.md
+baseline/library/recipes/ref-fantik-studio.md
+baseline/library/recipes/ref-fifth-and-dune.md
+baseline/library/recipes/ref-happyrobot.md
+baseline/library/recipes/ref-igloo-inc.md
+baseline/library/recipes/ref-itomdev.md
+baseline/library/recipes/ref-jesko-jets.md
+baseline/library/recipes/ref-joseph-san.md
+baseline/library/recipes/ref-kvs-services.md
+baseline/library/recipes/ref-lando-norris.md
+baseline/library/recipes/ref-madbox.md
+baseline/library/recipes/ref-messenger-abeto.md
+baseline/library/recipes/ref-oryzo.md
+baseline/library/recipes/ref-oryzo.tokens.css
+baseline/library/recipes/ref-quiet-cubes.md
+baseline/library/recipes/ref-sanrita.md
+baseline/library/recipes/ref-sutera.md
+baseline/library/recipes/ref-vertex3d.md
+baseline/library/recipes/tesq.md
+baseline/library/references
+baseline/library/references/0001
+baseline/library/references/0001/CSS Variables.css
+baseline/library/references/0001/Design Tokens.json
+baseline/library/references/0001/Design.md
+baseline/library/references/0001/Tailwind V4.css
+baseline/library/references/0001/meta.json
+baseline/library/references/0002
+baseline/library/references/0002/CSS Variables.css
+baseline/library/references/0002/Design Tokens.json
+baseline/library/references/0002/Design.md
+baseline/library/references/0002/Tailwind V4.css
+baseline/library/references/0002/meta.json
+baseline/library/references/0003
+baseline/library/references/0003/CSS Variables.css
+baseline/library/references/0003/Design Tokens.json
+baseline/library/references/0003/Design.md
+baseline/library/references/0003/Tailwind V4.css
+baseline/library/references/0003/meta.json
+baseline/library/references/0004
+baseline/library/references/0004/CSS Variables.css
+baseline/library/references/0004/Design Tokens.json
+baseline/library/references/0004/Design.md
+baseline/library/references/0004/Tailwind V4.css
+baseline/library/references/0004/meta.json
+baseline/library/references/0005
+baseline/library/references/0005/CSS Variables.css
+baseline/library/references/0005/Design Tokens.json
+baseline/library/references/0005/Design.md
+baseline/library/references/0005/Tailwind V4.css
+baseline/library/references/0005/meta.json
+baseline/library/references/0006
+baseline/library/references/0006/CSS Variables.css
+baseline/library/references/0006/Design Tokens.json
+baseline/library/references/0006/Design.md
+baseline/library/references/0006/Tailwind V4.css
+baseline/library/references/0006/meta.json
+baseline/library/references/0007
+baseline/library/references/0007/CSS Variables.css
+baseline/library/references/0007/Design Tokens.json
+baseline/library/references/0007/Design.md
+baseline/library/references/0007/Tailwind V4.css
+baseline/library/references/0007/meta.json
+baseline/library/references/0008
+baseline/library/references/0008/CSS Variables.css
+baseline/library/references/0008/Design Tokens.json
+baseline/library/references/0008/Design.md
+baseline/library/references/0008/Tailwind V4.css
+baseline/library/references/0008/meta.json
+baseline/library/references/0009
+baseline/library/references/0009/CSS Variables.css
+baseline/library/references/0009/Design Tokens.json
+baseline/library/references/0009/Design.md
+baseline/library/references/0009/Tailwind V4.css
+baseline/library/references/0009/meta.json
+baseline/library/references/0010
+baseline/library/references/0010/CSS Variables.css
+baseline/library/references/0010/Design Tokens.json
+baseline/library/references/0010/Design.md
+baseline/library/references/0010/Tailwind V4.css
+baseline/library/references/0010/meta.json
+baseline/library/references/0011
+baseline/library/references/0011/CSS Variables.css
+baseline/library/references/0011/Design Tokens.json
+baseline/library/references/0011/Design.md
+baseline/library/references/0011/Tailwind V4.css
+baseline/library/references/0011/meta.json
+baseline/library/references/0012
+baseline/library/references/0012/CSS Variables.css
+baseline/library/references/0012/Design Tokens.json
+baseline/library/references/0012/Design.md
+baseline/library/references/0012/Tailwind V4.css
+baseline/library/references/0012/meta.json
+baseline/library/references/0013
+baseline/library/references/0013/CSS Variables.css
+baseline/library/references/0013/Design Tokens.json
+baseline/library/references/0013/Design.md
+baseline/library/references/0013/Tailwind V4.css
+baseline/library/references/0013/meta.json
+baseline/library/references/0014
+baseline/library/references/0014/CSS Variables.css
+baseline/library/references/0014/Design Tokens.json
+baseline/library/references/0014/Design.md
+baseline/library/references/0014/Tailwind V4.css
+baseline/library/references/0014/meta.json
+baseline/library/references/0015
+baseline/library/references/0015/CSS Variables.css
+baseline/library/references/0015/Design Tokens.json
+baseline/library/references/0015/Design.md
+baseline/library/references/0015/Tailwind V4.css
+baseline/library/references/0015/meta.json
+baseline/library/references/0016
+baseline/library/references/0016/CSS Variables.css
+baseline/library/references/0016/Design Tokens.json
+baseline/library/references/0016/Design.md
+baseline/library/references/0016/Tailwind V4.css
+baseline/library/references/0016/meta.json
+baseline/library/references/0017
+baseline/library/references/0017/CSS Variables.css
+baseline/library/references/0017/Design Tokens.json
+baseline/library/references/0017/Design.md
+baseline/library/references/0017/Tailwind V4.css
+baseline/library/references/0017/meta.json
+baseline/library/references/0018
+baseline/library/references/0018/CSS Variables.css
+baseline/library/references/0018/Design Tokens.json
+baseline/library/references/0018/Design.md
+baseline/library/references/0018/Tailwind V4.css
+baseline/library/references/0018/meta.json
+baseline/library/references/0019
+baseline/library/references/0019/CSS Variables.css
+baseline/library/references/0019/Design Tokens.json
+baseline/library/references/0019/Design.md
+baseline/library/references/0019/Tailwind V4.css
+baseline/library/references/0019/meta.json
+baseline/library/references/0020
+baseline/library/references/0020/CSS Variables.css
+baseline/library/references/0020/Design Tokens.json
+baseline/library/references/0020/Design.md
+baseline/library/references/0020/Tailwind V4.css
+baseline/library/references/0020/meta.json
+baseline/library/references/0021
+baseline/library/references/0021/CSS Variables.css
+baseline/library/references/0021/Design Tokens.json
+baseline/library/references/0021/Design.md
+baseline/library/references/0021/Tailwind V4.css
+baseline/library/references/0021/meta.json
+baseline/library/references/0022
+baseline/library/references/0022/CSS Variables.css
+baseline/library/references/0022/Design Tokens.json
+baseline/library/references/0022/Design.md
+baseline/library/references/0022/Tailwind V4.css
+baseline/library/references/0022/meta.json
+baseline/library/references/0023
+baseline/library/references/0023/CSS Variables.css
+baseline/library/references/0023/Design Tokens.json
+baseline/library/references/0023/Design.md
+baseline/library/references/0023/Tailwind V4.css
+baseline/library/references/0023/meta.json
+baseline/library/references/0024
+baseline/library/references/0024/CSS Variables.css
+baseline/library/references/0024/Design Tokens.json
+baseline/library/references/0024/Design.md
+baseline/library/references/0024/Tailwind V4.css
+baseline/library/references/0024/meta.json
+baseline/library/references/0025
+baseline/library/references/0025/CSS Variables.css
+baseline/library/references/0025/Design Tokens.json
+baseline/library/references/0025/Design.md
+baseline/library/references/0025/Tailwind V4.css
+baseline/library/references/0025/meta.json
+baseline/library/references/0026
+baseline/library/references/0026/CSS Variables.css
+baseline/library/references/0026/Design Tokens.json
+baseline/library/references/0026/Design.md
+baseline/library/references/0026/Tailwind V4.css
+baseline/library/references/0026/meta.json
+baseline/library/references/0027
+baseline/library/references/0027/CSS Variables.css
+baseline/library/references/0027/Design Tokens.json
+baseline/library/references/0027/Design.md
+baseline/library/references/0027/Tailwind V4.css
+baseline/library/references/0027/meta.json
+baseline/library/references/0028
+baseline/library/references/0028/CSS Variables.css
+baseline/library/references/0028/Design Tokens.json
+baseline/library/references/0028/Design.md
+baseline/library/references/0028/Tailwind V4.css
+baseline/library/references/0028/meta.json
+baseline/library/references/0029
+baseline/library/references/0029/CSS Variables.css
+baseline/library/references/0029/Design Tokens.json
+baseline/library/references/0029/Design.md
+baseline/library/references/0029/Tailwind V4.css
+baseline/library/references/0029/meta.json
+baseline/library/references/0030
+baseline/library/references/0030/CSS Variables.css
+baseline/library/references/0030/Design Tokens.json
+baseline/library/references/0030/Design.md
+baseline/library/references/0030/Tailwind V4.css
+baseline/library/references/0030/meta.json
+baseline/library/references/0031
+baseline/library/references/0031/CSS Variables.css
+baseline/library/references/0031/Design Tokens.json
+baseline/library/references/0031/Design.md
+baseline/library/references/0031/Tailwind V4.css
+baseline/library/references/0031/meta.json
+baseline/library/references/0032
+baseline/library/references/0032/CSS Variables.css
+baseline/library/references/0032/Design Tokens.json
+baseline/library/references/0032/Design.md
+baseline/library/references/0032/Tailwind V4.css
+baseline/library/references/0032/meta.json
+baseline/library/references/0033
+baseline/library/references/0033/CSS Variables.css
+baseline/library/references/0033/Design Tokens.json
+baseline/library/references/0033/Design.md
+baseline/library/references/0033/Tailwind V4.css
+baseline/library/references/0033/meta.json
+baseline/library/references/0034
+baseline/library/references/0034/CSS Variables.css
+baseline/library/references/0034/Design Tokens.json
+baseline/library/references/0034/Design.md
+baseline/library/references/0034/Tailwind V4.css
+baseline/library/references/0034/meta.json
+baseline/library/references/0035
+baseline/library/references/0035/CSS Variables.css
+baseline/library/references/0035/Design Tokens.json
+baseline/library/references/0035/Design.md
+baseline/library/references/0035/Tailwind V4.css
+baseline/library/references/0035/meta.json
+baseline/library/references/0036
+baseline/library/references/0036/CSS Variables.css
+baseline/library/references/0036/Design Tokens.json
+baseline/library/references/0036/Design.md
+baseline/library/references/0036/Tailwind V4.css
+baseline/library/references/0036/meta.json
+baseline/library/references/0037
+baseline/library/references/0037/CSS Variables.css
+baseline/library/references/0037/Design Tokens.json
+baseline/library/references/0037/Design.md
+baseline/library/references/0037/Tailwind V4.css
+baseline/library/references/0037/meta.json
+baseline/library/references/0038
+baseline/library/references/0038/CSS Variables.css
+baseline/library/references/0038/Design Tokens.json
+baseline/library/references/0038/Design.md
+baseline/library/references/0038/Tailwind V4.css
+baseline/library/references/0038/meta.json
+baseline/library/references/0039
+baseline/library/references/0039/CSS Variables.css
+baseline/library/references/0039/Design Tokens.json
+baseline/library/references/0039/Design.md
+baseline/library/references/0039/Tailwind V4.css
+baseline/library/references/0039/meta.json
+baseline/library/references/0040
+baseline/library/references/0040/CSS Variables.css
+baseline/library/references/0040/Design Tokens.json
+baseline/library/references/0040/Design.md
+baseline/library/references/0040/Tailwind V4.css
+baseline/library/references/0040/meta.json
+baseline/library/references/0041

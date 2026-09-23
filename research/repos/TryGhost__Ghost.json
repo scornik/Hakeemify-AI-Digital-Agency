@@ -1,0 +1,62 @@
+{
+  "repo": "TryGhost/Ghost",
+  "url": "https://github.com/TryGhost/Ghost",
+  "category": "cms",
+  "license": "MIT",
+  "stars": 55387,
+  "last_push": "2026-09-22",
+  "status_note": "active (ghost 6.65.1-rc.0; Node 22/24); monorepo with ghost/core (Express app), admin (Ember + React apps), and many @tryghost/* packages.",
+  "core_problem": "An opinionated, batteries-included publishing platform: posts/pages with a Lexical content model rendered to HTML, Handlebars themes driven by routes.yaml, members, paid tiers (Stripe), newsletters/email delivery, comments, ActivityPub, and a read-only Content API for headless use.",
+  "architecture": "ghost/core/core/server is an Express monolith over Bookshelf/Knex (MySQL 8 in prod, SQLite dev) with a hand-maintained table schema (server/data/schema/schema.js: posts has mobiledoc, lexical, html, plaintext, status, visibility, type, custom_template, canonical_url, newsletter_id...). Content model: posts store Lexical JSON (`lexical` column); server/lib/lexical.js renders it to the cached `html` column via @tryghost/kg-lexical-html-renderer with DEFAULT_NODES from @tryghost/kg-default-nodes (cards: image, gallery, bookmark, html, callout, product, signup, email CTA...), with render options for image transforms and feature flags; `validate()` renders with a throwing error handler to reject malformed docs; server/lib/mobiledoc.js keeps the legacy Mobiledoc card factory and @tryghost/kg-converters migrates mobiledoc->lexical. API layer: server/api/endpoints/* framework-style descriptors (docName, browse/read/edit with option allow-lists, permissions, cache keys) — posts-public.js is the Content API for posts (options include/filter/fields/formats/limit/order/page; formats html|plaintext; read by id|slug|uuid) served under web/api/endpoints/content. Frontend: routes.yaml (default: collections `/` permalink `/{slug}/` template index; taxonomies tag/author) parsed by services/route-settings and turned by frontend/services/routing/router-manager.js into StaticRoutesRouter, CollectionRouter, TaxonomyRouter, StaticPagesRouter, PreviewRouter registered in a registry; rendering via frontend/services/rendering (renderer, templates, format-response) through the theme-engine (express-hbs instance, helpers under frontend/helpers, partials). Themes are Handlebars packages validated by gscan (server/services/themes/validate.js: gscan.check/checkZip against the Ghost major version; `canActivate = !results.hasFatalErrors`; warnings hidden in production). Members/newsletters/tiers/offers/stripe/email-service/email-analytics/link-tracking/comments/recommendations/activitypub are services under server/services; scheduling via post-scheduling + jobs-service; the url service maintains resource URLs for the routing layer.",
+  "core_innovation": "A vertically integrated publisher: one content model (Lexical -> cached HTML) fanned out to web (routes.yaml + Handlebars), email newsletters, RSS and a Content API, with memberships and payments built in.",
+  "strengths": [
+    "Lexical JSON as canonical content with pre-rendered `html`/`plaintext` columns: render once on write, serve static HTML — good for a near-zero-JS blog surface.",
+    "routes.yaml is a small declarative routing DSL (collections with permalink/filter/template, taxonomies, static routes with data bindings) compiled into router classes — a clean separation of URL structure from templates.",
+    "gscan theme validation with fatal-error gating before activation is a mature 'gate before ship' precedent for template packages, including version-targeted rule sets.",
+    "Content API is stable, cacheable, key-based read-only access with include/filter/fields/formats — trivially consumable by Astro at build time.",
+    "Complete newsletter/member stack (Stripe tiers, offers, email batching, analytics, link tracking, suppression lists) that would take years to rebuild; MIT."
+  ],
+  "weaknesses": [
+    "Monolith: Express + Bookshelf + MySQL + its own admin (Ember/React) + Handlebars themes; not embeddable as a library, runs as a separate service per site or a Ghost(Pro) account.",
+    "Multi-tenancy absent: one Ghost instance = one site (Ghost(Pro) runs many instances); an agency would run N containers or pay per site.",
+    "Content model is post/page-centric with card-based rich text; no typed section/block schema, no design-system tokens, no fact provenance — irrelevant to SiteDefinition.",
+    "Themes are Handlebars, which would fight an Astro renderer; the visual identity of a client site would then be split across two template systems.",
+    "Very large codebase and release cadence (weekly minors) — operational burden for a blog add-on."
+  ],
+  "patterns_to_steal": [
+    "Render-on-write: store canonical structured content and a pre-rendered html/plaintext alongside -> cache rendered section HTML fragments per SiteDefinition version for instant preview diffs and Lighthouse-stable output (renderer).",
+    "gscan-style versioned rule sets with fatal vs warning classes and `canActivate = !hasFatalErrors` -> the Launch QA gate and anti-slop tier 1 should be a versioned rule pack with fatal/warning severity and an explicit activation predicate (qa_gate / anti_slop).",
+    "routes.yaml declarative collections/taxonomies with permalink and filter -> page archetype to route mapping declared in the playbook (e.g. /services/{slug}/ bound to service facts) rather than hard-coded in the renderer (renderer / playbook).",
+    "Content API consumption pattern (key-based read-only, formats=html, filter/include) -> if a client needs a blog/newsletter, run Ghost as an external service and pull posts into Astro at build time via the Content API; keep it out of SiteDefinition (cms add-on)."
+  ],
+  "patterns_to_avoid": [
+    "Embedding Ghost into the agency runtime -> monolithic service, MySQL, own admin; only ever integrate over its Content API.",
+    "Handlebars themes for client sites -> conflicts with the Astro renderer and the design-system token model.",
+    "Card-based rich text (Lexical cards) as the page model -> free-form content with no fact binding or arrangement grammar."
+  ],
+  "reusable_patterns": [
+    "RenderOnWriteCache: canonical structured content plus pre-rendered html/plaintext columns updated on save.",
+    "VersionedFatalWarningRulePack: validator rule sets keyed to a target version with fatal errors blocking activation and warnings advisory.",
+    "DeclarativeRouteMap: YAML collections/taxonomies/static routes with permalink and filter compiled into routers.",
+    "ReadOnlyContentAPI: key-scoped public read API with include/filter/fields/formats for static-site consumption."
+  ],
+  "adoption_strategy": "Ignore for V1 and for the core architecture; it does not touch SiteDefinition, facts, design systems or the pipeline. Post-V1, if a client needs a blog or newsletter, the cheapest quality path is Ghost as an external managed service (Ghost(Pro) or a container) consumed by Astro at build time through the Content API, with the newsletter/member surface left entirely to Ghost — rather than rebuilding email delivery. Take two ideas now: gscan's fatal/warning versioned rule pack shape for our QA and anti-slop gates, and render-on-write caching of section HTML.",
+  "recommendation": "Ignore",
+  "novelty_score": 4,
+  "difficulty_score": 5,
+  "pipeline_stages_affected": [
+    "cms",
+    "qa_gate",
+    "anti_slop",
+    "renderer"
+  ],
+  "evidence": [
+    "LICENSE (MIT, Ghost Foundation), ghost/core/package.json (6.65.1-rc.0; @tryghost/kg-lexical-html-renderer, kg-default-nodes, kg-converters, kg-card-factory, gscan, express-hbs, bookshelf, knex)",
+    "ghost/core/core/server/lib/lexical.js (LexicalHTMLRenderer with DEFAULT_NODES, render options, validate via throwing renderer), ghost/core/core/server/lib/mobiledoc.js (legacy CardFactory)",
+    "ghost/core/core/server/data/schema/schema.js (posts columns: mobiledoc, lexical, html, plaintext, status, visibility, type, custom_template, canonical_url, newsletter_id)",
+    "ghost/core/core/server/services/route-settings/default-routes.yaml, ghost/core/core/frontend/services/routing/router-manager.js (StaticRoutesRouter/CollectionRouter/TaxonomyRouter/StaticPagesRouter/PreviewRouter, registry)",
+    "ghost/core/core/frontend/services/theme-engine/engine.js (express-hbs instance, partials, restrictLayoutsTo), ghost/core/core/server/services/themes/validate.js (gscan.check/checkZip, canActivate = !hasFatalErrors)",
+    "ghost/core/core/server/api/endpoints/posts-public.js (Content API browse/read options: include, filter, fields, formats, limit, order, page; read by id/slug/uuid; cache keys)",
+    "tree: ghost/core/core/server/services/{members,newsletters,tiers,offers,stripe,email-service,email-analytics,link-tracking,comments,activitypub,post-scheduling,jobs-service,url}"
+  ]
+}

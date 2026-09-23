@@ -1,0 +1,69 @@
+{
+  "repo": "carbon-design-system/carbon",
+  "url": "https://github.com/carbon-design-system/carbon",
+  "category": "design-systems",
+  "license": "Apache-2.0",
+  "stars": 9478,
+  "last_push": "2026-09-22",
+  "status_note": "active; token sources have been migrated to W3C DTCG JSON (packages/*/src/dtcg/*.json) with JS/SCSS generated at build; @carbon/motion gained 'motion surfaces' (2026) as composite transition recipes",
+  "core_problem": "IBM's design system, whose foundation packages (@carbon/themes, @carbon/type, @carbon/layout, @carbon/motion, @carbon/colors) publish the design language as data — four colour themes, a 23-step type scale, spacing/breakpoints, and named easing/duration tokens — consumable from Sass, JS and now DTCG JSON.",
+  "architecture": "packages/themes: tokens are declared structurally in src/tokens/v11TokenGroup.ts via TokenGroup.create({name, properties:['background'], tokens:[{name:'background-hover', state:'hover'}...]}) — groups know which CSS properties they apply to and which interaction state each token represents; TokenSet/TokenFormat convert names to JS camelCase or SCSS `$kebab-01`. Values now live in src/dtcg/themes.json: each token is `{$type:'color', $description, $extensions:{'carbon.themes': {white:'{gray.10}', g10:'{white.default}', g90:'{gray.80}', g100:'{gray.90}'}}}` — four themes in one file as an extension on the token, with values as references into @carbon/colors (also DTCG, src/dtcg/colors.json). Component tokens (button, tag, notification, status, content-switcher) are separate DTCG files. tools.ts has adjustLightness/adjustAlpha helpers. The README documents 'contextual layer tokens' ($layer, $layer-accent) resolved to numbered tiers 01/02/03 by nesting depth via a <Layer> context. packages/type: scale.ts getTypeSize(n) = size(n-1) + (floor((n-2)/4)+1)·2 yielding 12,14,16,18,20,24,28,32,36,42,48,54,60,68,76,84,92,102,112,122,132,144,156; styles.ts defines type sets as objects {fontSize: rem(scaleNN), fontWeight, lineHeight, letterSpacing} in two families — productive (fixed) and expressive/fluid (with a `breakpoints:{md,lg,xlg,max}` map); fluid.ts converts a breakpoint map into calc() linear interpolation between breakpoints (`calc(min + (max-min) * ((100vw - minVw) / (maxVw - minVw)))`). packages/layout: baseFontSize 16, rem/em/px, breakpoints {sm 320/4col, md 672/8col, lg 1056/16col, xlg 1312, max 1584} with margins, miniUnit 8, spacing01..13, fluidSpacing, container sizes, iconSize. packages/motion: src/dtcg/motion.json declares durations (fast-01 70ms, fast-02 110, moderate-01 150, moderate-02 240, slow-01 400, slow-02 700, each with a usage $description) and easing as `$type: cubicBezier` arrays for standard/entrance/exit × productive/expressive; tokens.ts exports motion(name, mode) -> cubic-bezier string and resolveEasing -> numeric array for JS engines; surfaces.ts + src/dtcg/surfaces.json define 'motion surfaces' — named transition intents (disclosure, contextual, expand, invoke) with `$type:'transition'` DTCG value plus a carbon.motion extension {kind:'reveal'|'shared-element', duration token, enter/exit keyframes as plain CSS pairs, enterEasing/exitEasing {name, mode}, origin:'trigger'}; defineMotionSurface validates custom surfaces at module load.",
+  "core_innovation": "Motion and typography as validated data: easing curves indexed by (intent × mode), durations with documented intent, and 'motion surfaces' that bundle duration + enter/exit easing + engine-neutral keyframes into a named, validated recipe; plus a multi-theme-in-one-token DTCG encoding.",
+  "strengths": [
+    "DTCG-format sources with `$type`, `$description` and `$extensions` per token — a standards-based, tool-agnostic format; four themes stored as an extension map on each token rather than four files to keep in sync.",
+    "TokenGroup metadata (which CSS properties a group is valid for, which state a token represents) is machine-readable — enables lint rules like 'a hover token may only appear under :hover'.",
+    "Type scale is a formula (getTypeSize) with productive vs expressive/fluid sets; fluid.ts is a compact, correct linear-interpolation generator between breakpoints.",
+    "Motion tokens are two-dimensional (intent: standard/entrance/exit × mode: productive/expressive) with numeric curves available for JS engines; durations carry usage descriptions.",
+    "Motion surfaces: a composite, validated, engine-neutral recipe (CSS/WAAPI/View Transitions) — the closest thing in the field to our per-variant `motion` budget as data.",
+    "Contextual layer tokens (layer-01/02/03 resolved by nesting depth) are a proven model for 'surface elevation as context'."
+  ],
+  "weaknesses": [
+    "Themes are hand-authored per token (white/g10/g90/g100 values enumerated), not derived from seeds — no hue adaptation; changing a brand colour means editing many tokens.",
+    "IBM Plex / IBM product aesthetic and 16-column grid; components (packages/react) are enterprise UI, irrelevant here.",
+    "Heavy Sass toolchain (@carbon/styles) and generated artefacts (js/generated/*) required before packages even build; DTCG is source but consumption is via generated JS/SCSS.",
+    "Motion surfaces are brand new (2026) and small (4 built-ins); shared-element kind relies on a React adapter for layout projection.",
+    "Type sets are named by product role (productiveHeading03, expressiveHeading05, display04) with many aliases — a large vocabulary, not a small ratio-driven system."
+  ],
+  "patterns_to_steal": [
+    "DTCG token file shape with `$type`, `$description`, `$extensions.<vendor>` -> design_system: author our YAML tokens in DTCG-compatible structure (type, description, extensions for scheme-specific values and visual_dna metadata) so Style Dictionary-class tooling and validators apply.",
+    "Multi-scheme values as an extension map on the token (`carbon.themes: {white, g10, g90, g100}`) -> design_system: `schemes: {light, dark, high_contrast}` per semantic token instead of parallel files.",
+    "TokenGroup metadata (properties[], state) -> anti_slop + qa_gate: lint that colour tokens are used only on declared properties and state tokens only under matching pseudo-classes.",
+    "getTypeSize formula + fluid.ts breakpoint interpolation -> design_system: type scale as base + curve id, with `fluid: {md, lg, max}` maps compiled to calc() (or clamp()) at build; visual_dna exposes 'productive' vs 'expressive' type family.",
+    "Motion tokens as (intent × mode) easing + described durations, and motion surfaces {kind, duration, enter, exit, enterEasing, exitEasing} -> motion: section variants declare a `motion.surface` id; the compiler emits CSS with prefers-reduced-motion fallbacks and counts main-thread cost against the budget.",
+    "Contextual layer tokens resolved by nesting depth -> renderer: surface/elevation tokens for nested cards/sections resolved by composition depth in the assembly step."
+  ],
+  "patterns_to_avoid": [
+    "Hand-enumerated four-theme values -> our hue_adaptable systems must derive dark/high-contrast from seeds (Ant Design pattern) and only override where a designer authored an exception.",
+    "Sass-based consumption and generated-artefact build steps -> we compile YAML -> CSS vars in one TS step; no Sass.",
+    "The large role-named type-set vocabulary (30+ names) -> keep 6–8 type roles per design system tied to a scale curve.",
+    "Carbon React components -> enterprise UI; none appropriate for marketing sites."
+  ],
+  "reusable_patterns": [
+    "DtcgTokenFile: tokens as nested JSON with $type/$value/$description/$extensions; references as `{path.to.token}`.",
+    "SchemeExtensionMap: per-token map of scheme -> value inside $extensions instead of one file per scheme.",
+    "TokenGroupMetadata: groups carry allowed CSS properties and per-token interaction state.",
+    "FormulaTypeScale: size(n) = size(n-1) + (floor((n-2)/4)+1)·2 with productive (fixed) and expressive (fluid) sets.",
+    "FluidInterpolation: breakpoint font-size map compiled to calc() linear interpolation.",
+    "EasingIntentMode: easing tokens indexed by intent (standard/entrance/exit) × mode (productive/expressive), exposed as CSS string and numeric array.",
+    "MotionSurface: validated composite recipe {kind, duration, enter, exit, enterEasing, exitEasing} for one transition intent."
+  ],
+  "adoption_strategy": "Adapt. Do not use Carbon packages. Copy the DTCG token file structure (with scheme values as an extension map) as the on-disk format for design-system token files, port fluid.ts and getTypeSize into the type-scale compiler, and model our section `motion` budget after motion surfaces: a small validated set of named surfaces with (intent × mode) easings and described durations, compiled to CSS with reduced-motion fallbacks. Optionally reuse @carbon/motion's easing curves as the default 'productive/expressive' vocabulary.",
+  "recommendation": "Adapt",
+  "novelty_score": 5,
+  "difficulty_score": 2,
+  "pipeline_stages_affected": [
+    "design_system",
+    "motion",
+    "renderer",
+    "qa_gate",
+    "anti_slop"
+  ],
+  "evidence": [
+    "packages/themes/src/dtcg/README.md, src/dtcg/themes.json ($extensions.carbon.themes per token, 234 color tokens), src/index.ts (generated white/g10/g90/g100 imports)",
+    "packages/themes/src/tokens/v11TokenGroup.ts, TokenGroup.ts, TokenSet.ts, TokenFormat.ts, index.ts (unstable_metadata), tools.ts (adjustLightness/adjustAlpha)",
+    "packages/type/src/scale.ts (getTypeSize formula, 23 steps), styles.ts (productive vs expressive sets with breakpoints maps), fluid.ts (calc() interpolation)",
+    "packages/layout/src/index.ts (breakpoints with columns/margins, rem/em/px, miniUnit, spacing/fluidSpacing/container), tokens.ts",
+    "packages/motion/src/dtcg/motion.json (durations with descriptions, cubicBezier easings), src/dtcg/surfaces.json (disclosure/contextual/expand/invoke), src/tokens.ts (motion(), resolveEasing, resolveDuration), src/surfaces.ts (MotionSurfaceDefinition, defineMotionSurface, validateSurface), README.md",
+    "packages/colors/src/index.ts (generated from src/dtcg/colors.json)"
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "repo": "AyushmanGupta21/Bloom",
+  "url": "https://github.com/AyushmanGupta21/Bloom",
+  "category": "ai-website-builders",
+  "license": "No LICENSE file (GitHub reports none); all rights reserved by default",
+  "stars": 6,
+  "last_push": "2026-08-29",
+  "status_note": "active hobby project; a TubeGuruji-course-derived builder (frames/projects/chats schema, WebsiteDesign and ElementSettingSection components) re-skinned with an NVIDIA NIM provider layer and a three.js liquid-glass landing page; 880 KB of the repo is a committed .graphify code-graph viewer, not templates",
+  "core_problem": "Prompt-to-single-page-HTML generator: streams a Tailwind HTML document from NVIDIA NIM (gpt-oss-120b/20b) token-by-token into an iframe, lets the user click elements to edit text/styles in place, and exports the HTML.",
+  "architecture": "Next.js 15.5 App Router + React 19 + TypeScript, Clerk auth, Neon Postgres via Drizzle. config/schema.ts: users {credits, maxCredits}, projects, frames {frameId, designCode text}, chats {chatMessage json}, generations {generationId, provider, modelId, canonicalModelId, prompt, output, reasoning, status, durationMs, promptTokens, completionTokens, finishReason, error}. lib/ai/: types.ts (BloomModel with capability flags, ChatRequest, ChatChunk, AIProvider interface), registry.ts, router.ts (AIRouter.executeStream with same-provider fallback to 'bloom-reason' when the selected model errors), providers/nvidia (OpenAI-compatible client against integrate.api.nvidia.com), providers/openrouter stub. app/api/ai-model/route.ts inserts a 'started' generations row, streams raw text/plain chunks (X-Bloom-Generation-Id header), caps max_tokens at 6000 with a comment explaining truncated HTML is worse than a shorter page, temperature 0.6, then updates the row with output/reasoning/tokens/duration. The prompt lives in the client: app/playground/[projectId]/PlayGroundContent.tsx const Prompt ('expert web designer... visually stunning... single-page HTML... Tailwind CDN... Google Fonts Inter... Lucide via unpkg... images ONLY from picsum.photos... subtle gradients, rounded corners, soft shadows'); a keyword regex (/create|build|design|generate|.../) decides whether to wrap the user text in that prompt, otherwise it is passed raw; modifications send the full current HTML plus the request and expect a full rewrite. The client watches the stream for a ```html fence, then rAF-batches setGeneratedCode. app/playground/_components/WebsiteDesign.tsx writes a fixed shell into the iframe with document.write, extracts the <body> contents of the generated document (discarding its <head>), sets root.innerHTML, re-creates <script> nodes so they execute, re-runs lucide.createIcons/initFlowbite on timers, and attaches mouseover/click handlers that outline elements and set contenteditable=true; ElementSettingSection.tsx mutates style and className directly; saving clones documentElement, strips outlines and persists outerHTML to frames.designCode. The iframe is sandbox=\"allow-scripts allow-same-origin\". .claude/CLAUDE.md wires an Astryx design-system CLI (148 components, tokens) for the builder's own UI; generated output does not use it.",
+  "core_innovation": "None; the closest thing to a mechanism is a per-generation audit row (prompt, output, reasoning, tokens, duration, finish reason) and a body-only injection into a fixed iframe shell.",
+  "strengths": [
+    "generations table records provider, canonical model id, prompt, output, reasoning, token counts, duration, finishReason and status for every call; that is the right minimum telemetry row.",
+    "Provider abstraction (AIProvider interface, BloomModel capability flags, AIRouter with same-provider fallback) is cleanly separated from the route handler.",
+    "Explicit max_tokens cap with a written rationale (truncated HTML is worse than a shorter page) acknowledges the truncation failure mode of raw-HTML output.",
+    "Body-only injection into a fixed shell means the model never controls the document head; conceptually close to 'renderer owns the shell'.",
+    "rAF-batched streaming render is a small, correct fix for setState storms during token streaming."
+  ],
+  "weaknesses": [
+    "iframe sandbox=\"allow-scripts allow-same-origin\" defeats the sandbox: generated scripts run same-origin with the app and can reach the parent document and Clerk session.",
+    "Output is a raw HTML string with no schema, no validation, no QA of any kind; the only structural check is finding a ```html fence.",
+    "Generated <head> is discarded, so the Google Fonts link the prompt demands is dropped unless the shell already has it; the prompt and the renderer disagree.",
+    "Prompt mandates the generic look verbatim ('Inter' as the only font, 'subtle gradients, rounded corners, soft shadows') and random picsum.photos images that have no relationship to the business; the result is polite, uniform slop.",
+    "Prompt is composed on the client and intent is detected by a keyword regex, so non-matching requests are sent raw and matching ones can rewrite the instructions.",
+    "Every modification is a full-document rewrite of the entire HTML; no diffing, no lineage between frames beyond overwriting designCode.",
+    "Direct-DOM editing (contenteditable, style/className mutation) with outerHTML persistence has no source of truth; edits and regenerations diverge and outlines/attributes can leak into saved output.",
+    "CDN scripts pinned to @latest (lucide via unpkg) in generated pages; Tailwind Play CDN in production output.",
+    "No license file; 6 stars; committed .graphify cache and studio HTML inflate the repo."
+  ],
+  "patterns_to_steal": [
+    "GenerationAuditRow (provider, canonical model, prompt, output, reasoning, tokens, duration, finishReason, status, error) → telemetry: mirror this as the per-call record attached to each Decision Manifest, keyed by predicate-snapshot hash.",
+    "Shell-owns-head: the renderer supplies the document shell and the model output is only ever inserted into a designated region → renderer: already our model (Astro layout owns head, fonts, meta, schema.org); Bloom shows what breaks when the prompt still asks the model for head content.",
+    "Truncation as a first-class failure: cap and detect finishReason=length → qa_gate: any selection call that ends on length is a hard failure, and typed JSON makes truncation detectable rather than guessable."
+  ],
+  "patterns_to_avoid": [
+    "allow-scripts plus allow-same-origin on an iframe that runs model-generated markup → sandbox escape into the builder session; our preview is a static Astro build served from an isolated origin.",
+    "Raw HTML string as the AI contract with fence-sniffing as the parser → no Zod validation, no section typing, no diffs; contradicts SiteDefinition.",
+    "contenteditable/direct-DOM editing persisted as outerHTML → no source of truth; the post-V1 visual editor must edit SiteDefinition JSON and re-render.",
+    "Hardcoded single font ('Inter') and random stock photos (picsum) in the prompt → the exact 'AI template' tell our tier-1 gate bans; photos must be owner assets with art-direction constraints.",
+    "Keyword-regex intent routing and client-side prompt assembly → fragile and injectable; orchestration decides turn types server-side.",
+    "Full-document rewrite for every edit → non-deterministic drift and cost; edits are patches to typed state."
+  ],
+  "reusable_patterns": [
+    "GenerationAuditRow: one durable record per model call with model identity, prompt, output, reasoning, usage, duration, finish reason and status.",
+    "ShellOwnsHead: the renderer controls the document shell; model output is confined to a designated content region.",
+    "StreamBatchRender: buffer streamed tokens and flush to UI state at most once per animation frame.",
+    "SameProviderFallback: on model-specific errors, retry with a known-good default model from the same provider before surfacing the error."
+  ],
+  "adoption_strategy": "Ignore. Bloom is a raw-HTML, single-page, prompt-in-the-client builder whose preview iframe is effectively unsandboxed and whose editor mutates the DOM with no source of truth; its prompt hardcodes Inter, soft shadows, rounded corners and random picsum photos, which is precisely the uniform look the anti-slop gate exists to reject. The one thing worth keeping is the shape of its generations audit row, which we replicate in telemetry alongside the Decision Manifest. Nothing else maps onto an Astro/Zod pipeline.",
+  "recommendation": "Ignore",
+  "novelty_score": 1,
+  "difficulty_score": 1,
+  "pipeline_stages_affected": ["anti_slop", "qa_gate", "visual_editor"],
+  "evidence": [
+    "app/playground/[projectId]/PlayGroundContent.tsx lines 23-33 (Prompt constant: Inter, picsum.photos, 'subtle gradients, rounded corners, soft shadows') and 149-157 (keyword regex intent routing, full-HTML modification prompt), 190-230 (```html fence detection, rAF-batched setGeneratedCode)",
+    "app/api/ai-model/route.ts (generations insert/update, max_tokens cap 6000 with rationale, temperature 0.6, text/plain streaming, X-Bloom-* headers)",
+    "app/playground/_components/WebsiteDesign.tsx lines 98-165 (document.write shell, body-only extraction, innerHTML injection, script re-execution, lucide/flowbite reinit timers, contenteditable selection handlers) and 279-287 (sandbox=\"allow-scripts allow-same-origin\")",
+    "app/playground/_components/ElementSettingSection.tsx (direct style/className mutation)",
+    "config/schema.ts (users.credits, projects, frames.designCode, chats.chatMessage json, generations audit columns)",
+    "lib/ai/types.ts (BloomModel, ModelCapability, AIProvider, GenerationRecord), lib/ai/router.ts (DEFAULT_FAST_MODEL fallback)",
+    "package.json (name bloom-ai-builder; @google/generative-ai present but unused by the NIM path; three, gsap, lenis for the landing page; @astryxdesign/* for builder UI)",
+    ".claude/CLAUDE.md (Astryx design-system CLI instructions for the builder UI)",
+    "git ls-files showing .graphify/studio/studio.html (588 KB) and studio-template.html (293 KB) as the repo's only large HTML files",
+    "raw/AyushmanGupta21_Bloom/meta.json (license null, 6 stars, pushed 2026-08-29)"
+  ]
+}

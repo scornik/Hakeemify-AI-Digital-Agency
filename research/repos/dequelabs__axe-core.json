@@ -1,0 +1,68 @@
+{
+  "repo": "dequelabs/axe-core",
+  "url": "https://github.com/dequelabs/axe-core",
+  "category": "quality",
+  "license": "MPL-2.0",
+  "stars": 7544,
+  "last_push": "2026-09-22",
+  "status_note": "active; v4.13.0; Deque-maintained with ACT-rule alignment; companion repo dequelabs/axe-core-npm (MPL-2.0) ships @axe-core/playwright, @axe-core/puppeteer, @axe-core/cli, @axe-core/react, @axe-core/reporter-earl",
+  "core_problem": "Runs a declarative set of ~105 accessibility rules inside the page (including iframes and shadow DOM) and classifies every matched element into violations, passes, incomplete (needs review) or inapplicable, with impact, WCAG/ACT tags and per-check messages, so automated WCAG testing is consistent across tools and browsers.",
+  "architecture": "Rule = JSON spec in lib/rules/<id>.json: {id, impact (minor|moderate|serious|critical), selector (CSS), matches (named matcher fn id, e.g. 'color-contrast-matches'), excludeHidden, enabled, pageLevel, reviewOnFail, preload, tags [...], actIds [...], metadata {description, help}, any/all/none (check ids)}. lib/core/base/rule.js materializes it (Rule constructor assigns selector default '*', any/all/none arrays, tags, actIds, createExecutionContext(matches)). Check = lib/checks/<cat>/<id>.json {id, evaluate: '<id>-evaluate', options, metadata {impact, messages {pass, fail, incomplete}}} with the evaluate function in <id>-evaluate.js; e.g. checks/color/color-contrast.json carries options (contrastRatio normal 4.5 / large 3, boldValue 700, largeTextPt 18, shadowOutlineEmMax) and 16 distinct incomplete reasons (bgImage, bgGradient, imgNode, bgOverlap, complexTextShadows, fgAlpha, pseudoContent, outsideViewport, shortTextContent, equalRatio...). Rule semantics: any = at least one check passes, all = all pass, none = none pass; a check returning undefined puts the node in 'incomplete'. Tags (doc/API.md): wcag2a, wcag2aa, wcag2aaa, wcag21a, wcag21aa, wcag22aa, best-practice, wcag### (success criterion e.g. wcag111), ACT, section508(.x.y), TTv5/TT#, EN-301-549/EN-9.x, RGAAv4, experimental (disabled by default), cat.* (aria, color, forms, keyboard, language, name-role-value, parsing, semantics, sensory-and-visual-cues, structure, tables, text-alternatives, time-and-media). doc/rule-descriptions.md inventory: 60 WCAG 2.0 A/AA, 2 WCAG 2.1 (autocomplete-valid, avoid-inline-spacing), 1 WCAG 2.2 (target-size), 27 best-practice (landmark-*, region, page-has-heading-one, heading-order, skip-link, tabindex, meta-viewport-large, empty-heading...), 3 AAA (color-contrast-enhanced, identical-links-same-purpose, meta-refresh-no-exceptions), 7 experimental (p-as-heading, focus-order-semantics, hidden-content, label-content-name-mismatch, css-orientation-lock, table-fake-caption, td-has-header), 5 deprecated. API: axe.run(context, options) where context = selector | {include, exclude} | {fromFrames, fromShadowDom}, options = {runOnly: {type:'tag'|'rule', values} , rules: {id: {enabled}}, reporter: v1|v2|raw|raw-env|no-passes|na (lib/core/reporters), resultTypes ['violations',...] (only limits expensive selector generation), selectors, ancestry, xpath, absolutePaths, iframes, elementRef, frameWaitTime 60000, preload (cssom), performanceTimer, pingWaitTime}. axe.configure({rules, checks, branding, reporter, locale, noHtml, allowedOrigins}) adds custom rules/checks at runtime. Results: {url, timestamp, testEngine, testEnvironment, testRunner, toolOptions, violations|passes|incomplete|inapplicable: [{id, impact, tags, description, help, helpUrl, nodes: [{html, impact, target (selector array per frame/shadow level), failureSummary, any, all, none: [{id, impact, message, data, relatedNodes}]}]}]}. Multi-frame via axe.runPartial/finishRun and frameMessenger. @axe-core/playwright: new AxeBuilder({page}).include(sel).exclude(sel).withTags([...]).withRules([...]).disableRules([...]).options({...}).setLegacyMode().analyze() -> AxeResults; injects axe into every frame and uses runPartial/finishRun.",
+  "core_innovation": "A rule/check algebra (any/all/none over small named checks, each with pass/fail/incomplete messages) that yields a three-way outcome per element, making 'needs human review' a first-class machine result rather than a false pass.",
+  "strengths": [
+    "Deterministic for a given DOM + viewport + loaded fonts; no timing or network dependence, so results are gate-safe on run 1.",
+    "The incomplete bucket with per-check reason codes tells us exactly which human checks remain (e.g. color-contrast bgImage/bgGradient -> 'contrast on photo/gradient' manual check).",
+    "Tag-driven selection (runOnly wcag2a/wcag2aa/wcag21aa/wcag22aa/best-practice) plus rules enable map lets policy be a data file; axe.getRules(tags) enumerates the active set for the report.",
+    "Rich per-node evidence: target selectors through iframes/shadow DOM, html snippet, failureSummary, check data (fg/bg color, ratio, font size), relatedNodes.",
+    "Custom rules/checks can be registered with axe.configure without forking; ACT rule ids let us cite W3C test rules in the Decision Manifest.",
+    "MPL-2.0 is file-level copyleft: using or bundling unmodified is fine for a closed SaaS; only modified axe source files must be published.",
+    "Runs 27 best-practice and 3 wcag21/22 rules that Lighthouse skips (region, page-has-heading-one, landmark uniqueness, nested-interactive, avoid-inline-spacing, no-autoplay-audio) - covering structural rules our section library must satisfy.",
+    "EARL JSON-LD reporter exists (@axe-core/reporter-earl) for a standards-based interchange format; v2 reporter gives compact nodes."
+  ],
+  "weaknesses": [
+    "Coverage ceiling: Deque's own claim is ~57% of WCAG issues by volume; everything requiring judgement (meaningful alt, focus visibility, reading order, reduced motion, link purpose, captions quality, keyboard operability of custom widgets) is either incomplete or entirely absent (no focus-visible rule, no prefers-reduced-motion rule, no reading-order rule).",
+    "color-contrast goes incomplete on any text over images, gradients, overlapping elements or alpha foregrounds - exactly the hero-over-photo pattern our art direction produces, so the gate needs a separate sampled-pixel contrast check.",
+    "Results are viewport- and state-dependent (target-size, color-contrast, hidden content): must run at mobile and desktop viewports and after fonts and lazy content load, and again after opening menus/dialogs.",
+    "Experimental rules (p-as-heading, focus-order-semantics, label-content-name-mismatch) are disabled by default and produce false positives; enabling them needs a review policy.",
+    "Rule set changes between minors (deprecations: duplicate-id, audio-caption, aria-roledescription); pin the version and snapshot getRules() output into the gate config.",
+    "Repository is ~31 MB of HTML fixtures (languages.json shows 31 MB HTML) - fine to depend on, awkward to vendor.",
+    "No site-level or navigation-level reasoning (no crawl, no per-route sampling, no cross-page consistency)."
+  ],
+  "patterns_to_steal": [
+    "Rule spec {selector, matches, any/all/none checks, tags, impact, metadata} -> qa_gate: express our own DOM checks (placeholder text, duplicate h1, empty section, link text 'click here', CTA present) in the same JSON grammar and register them via axe.configure so they run in-page with axe's selector/iframe machinery and appear in the same result shape.",
+    "Three-way outcome per element (violation | pass | incomplete) with incomplete reason codes -> qa_gate GateReport: 'needs_review' status with reason enum; map color-contrast incomplete reasons to specific human checks (bgImage/bgGradient -> visual contrast check on hero photos).",
+    "Impact enum critical/serious/moderate/minor -> qa_gate severity and Lighthouse weight mapping (10/7/3/1) - reuse to weight our own checks consistently.",
+    "Tags as policy surface (runOnly by tag + rules override) -> qa_gate config: a11y_policy: {tags: ['wcag2a','wcag2aa','wcag21aa','wcag22aa','best-practice'], disable: ['frame-tested'], enable_experimental: ['p-as-heading']} snapshotted into the Decision Manifest.",
+    "target selector arrays per frame/shadow level -> qa_gate evidence: store target[] verbatim; Playwright can re-locate the element for screenshots via page.frameLocator/locator chains.",
+    "axe.getRules(tags) enumeration -> gate report: print the exact rule list executed with version, so the client report and Decision Manifest state what was checked, not just what failed.",
+    "Check options as data (contrastRatio expected 4.5/3, largeTextPt 18) -> design_system: validate design-system token pairs (text/background combos in visual_dna) against the same thresholds at build time, before any page is rendered."
+  ],
+  "patterns_to_avoid": [
+    "Treating zero violations as WCAG-AA conformance in client-facing copy -> ~43% of criteria are not automatable; the gate must require the manual checklist and word the report as 'automated checks passed'.",
+    "Running only Lighthouse's embedded axe -> it runs a subset (wcag2a/aa + hand-picked best-practice) and drops incomplete nodes; run @axe-core/playwright directly with the full tag set and keep incomplete.",
+    "Enabling all experimental rules as errors -> known false positives (p-as-heading, focus-order-semantics); run them as warnings/informative only.",
+    "Writing a large corpus of custom axe rules for non-a11y checks -> rules run in-page with no access to network, crawl graph, or build artifacts; keep site-level checks (canonical uniqueness, 404s, schema.org) in the Node-side gate."
+  ],
+  "reusable_patterns": [
+    "AnyAllNoneCheckAlgebra: a rule is a selector plus small named checks composed with any/all/none; a check that cannot decide returns undefined and the element becomes 'needs review' instead of pass.",
+    "IncompleteReasonCodes: every non-decidable outcome carries a stable reason id (bgImage, fgAlpha, outsideViewport...) that a downstream process maps to a specific human task.",
+    "TagPolicySelection: rule activation is a set algebra over standards tags plus per-rule overrides, snapshotted for reproducibility.",
+    "FrameAwareTargetPath: element identity is an array of selectors, one per iframe/shadow boundary, so evidence survives re-location in another tool.",
+    "RuntimeRuleRegistration: a host can add rules/checks via configure() without forking the engine."
+  ],
+  "adoption_strategy": "Adopt @axe-core/playwright (pinned axe-core version) inside the Playwright crawl step of the Launch QA gate: run AxeBuilder.withTags(['wcag2a','wcag2aa','wcag21a','wcag21aa','wcag22aa','best-practice']) on every crawled page at mobile and desktop viewports, after fonts settle, and again in snapshot states (nav open, form error state, thank-you page). Treat violations of impact serious/critical as gate failures, moderate/minor as warnings, and emit every incomplete node as a needs_review row with its reason code mapped to our manual checklist. Register 6-10 house rules via axe.configure (placeholder text patterns, single h1, non-empty sections, generic link text) so they ride on the same engine and result shape. Keep the pixel-sampling contrast check for text over images/gradients, the focus-visible tab walk, and the prefers-reduced-motion check as separate Playwright checks, since axe has no rules for them.",
+  "recommendation": "Adopt",
+  "novelty_score": 6,
+  "difficulty_score": 2,
+  "pipeline_stages_affected": ["qa_gate", "design_system", "art_direction", "anti_slop"],
+  "evidence": [
+    "lib/rules/color-contrast.json, lib/rules/image-alt.json, lib/rules/focus-order-semantics.json (rule spec fields: id, impact, selector, matches, excludeHidden, tags, actIds, metadata, any/all/none; experimental tag)",
+    "lib/core/base/rule.js (Rule constructor: selector default '*', any/all/none, tags, actIds, enabled, pageLevel, reviewOnFail, preload, createExecutionContext(matches))",
+    "lib/checks/color/color-contrast.json (check options contrastRatio 4.5/3, boldValue 700, largeTextPt 18; messages pass/fail/incomplete with 16 incomplete reason keys)",
+    "doc/rule-descriptions.md (auto-generated inventory: 60 WCAG 2.0 A/AA, 2 WCAG 2.1, 1 WCAG 2.2, 27 best-practice, 3 AAA, 7 experimental, 5 deprecated; issue type failure vs needs review per rule)",
+    "doc/API.md sections: Axe-core Tags table, axe.run Options Parameter table (runOnly, rules, reporter, resultTypes, selectors, ancestry, xpath, iframes, elementRef, frameWaitTime, preload, performanceTimer, pingWaitTime), Results Object (passes/violations/incomplete/inapplicable, node fields target/any/all/none/relatedNodes), axe.configure, axe.runPartial/finishRun",
+    "lib/core/reporters listing (v1, v2, raw, raw-env, no-passes, na) and lib/checks category directories (aria, color, forms, generic, keyboard, label, landmarks, language, lists, media, mobile, navigation, parsing, shared, tables, visibility; 121 check JSON files)",
+    "dequelabs/axe-core-npm packages/playwright/src/index.ts (AxeBuilder include/exclude/options/withRules/withTags/disableRules/setLegacyMode/analyze), packages/reporter-earl/README.md (EARL 1.0 JSON-LD reporter), packages listing (cli, playwright, puppeteer, react, reporter-earl, webdriverio, webdriverjs)",
+    "GoogleChrome/lighthouse core/gather/gatherers/accessibility.js (shows which axe rules Lighthouse enables/disables, confirming the coverage gap)"
+  ]
+}

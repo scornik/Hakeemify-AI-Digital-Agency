@@ -1,0 +1,13 @@
+node_modules/
+dist/
+coverage/
+.turbo/
+*.tsbuildinfo
+.env
+.env.local
+test-results/
+playwright-report/
+blob-report/
+.lighthouseci/
+.astro/
+fixtures/**/dist/

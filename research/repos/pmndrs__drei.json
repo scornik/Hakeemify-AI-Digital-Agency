@@ -1,0 +1,67 @@
+{
+  "repo": "pmndrs/drei",
+  "url": "https://github.com/pmndrs/drei",
+  "category": "3d-webgl",
+  "license": "MIT",
+  "stars": 9885,
+  "last_push": "2026-09-21",
+  "status_note": "active; semantic-release versioning (10.x), peer @react-three/fiber ^9 / react ^19 / three >=0.159",
+  "core_problem": "A grab-bag of ~200 ready-made r3f components and hooks (environments, controls, text, performance, loaders) so common three.js recipes are one JSX tag.",
+  "architecture": "Flat src/core (three-only components) and src/web (DOM-touching components) directories, one file per helper, re-exported from a single index with sideEffects:false and /* @__PURE__ */ annotations so unused helpers tree-shake. Runtime deps are heavy: three-stdlib (ported examples/jsm), troika-three-text (SDF text), three-mesh-bvh, camera-controls, maath, @monogrid/gainmap-js, @mediapipe/tasks-vision, hls.js, detect-gpu, zustand. Relevant helpers read: Float.tsx (a useFrame that sets rotation.x/y/z and position.y from cos/sin of clock time, matrixAutoUpdate=false); PerformanceMonitor.tsx (samples fps over `ms`=250 windows for `iterations`=10, computes refreshrate as max fps, fires onIncline/onDecline when >threshold (0.75) of averages sit above/below bounds(refreshrate) e.g. [40,60], nudges a 0..1 `factor` by `step`, and after `flipflops` oscillations fires onFallback and stops sampling); AdaptiveDpr.tsx (setDpr(performance.current * initialDpr) and optional image-rendering:pixelated); Preload.tsx (gl.compile(scene,camera) plus a throwaway CubeCamera render in a layout effect to force shader compilation before first paint); Environment.tsx + useEnvironment.tsx (preset names map to 1k .hdr files fetched from https://raw.githack.com/pmndrs/drei-assets/<sha>/hdri/, loaded via RGBELoader/EXRLoader/GainMapLoader and PMREM'd); Text.tsx (wraps troika-three-text with suspend-react); web/ScrollControls.tsx (creates its own absolutely-positioned scrolling div over the canvas with sticky inner container, maath easing damping, exposes range()/curve()/visible() offsets). AI wiring: none.",
+  "core_innovation": "A performance-monitor hysteresis loop (bounded fps averages, step factor, flip-flop fallback) that lets a scene self-tune quality without oscillating.",
+  "strengths": [
+    "PerformanceMonitor is a small, well-designed adaptive-quality algorithm: refresh-rate-aware bounds, threshold voting over N averages, and a flip-flop counter that locks in a fallback baseline instead of ping-ponging.",
+    "Preload's gl.compile + cube-camera warm-up is the correct way to move shader compilation off the reveal moment.",
+    "AdaptiveDpr shows the minimal consumer of r3f's performance.current: multiply the initial dpr.",
+    "sideEffects:false and PURE annotations mean importing one helper does not drag in the whole 1.5 MB package (still drags three + r3f).",
+    "Honest docs: performance section explicitly frames these as 'regress quality on movement' tools."
+  ],
+  "weaknesses": [
+    "Whole package 1575 kB min / 488 kB gzip (bundlephobia); measured r3f + Float + Environment + AdaptiveDpr + PerformanceMonitor + Preload island = 1177 kB min / 329 kB gzip / 265 kB brotli, i.e. 1.8x our total JS budget.",
+    "<Environment preset> fetches ~1-2 MB HDRs from raw.githack.com, a third-party CDN we do not control: unacceptable for a production site (availability, privacy, LCP).",
+    "<Text> pulls troika-three-text (+ its worker/SDF generation) for 3D typography, roughly 100 kB+ gzip on top; 3D text is also an obvious slop tell.",
+    "ScrollControls replaces native scrolling with its own overflow div: breaks Astro page scroll, Lenis, anchor links, and keyboard/screen-reader scroll semantics; never suitable for a single below-fold section.",
+    "Float.tsx is literally the 'floating 3D blob' idiom: sin/cos idle wobble with random phase. It is the most recognisable AI-generated-landing-page signature of 2023-2025 (Spline/r3f glossy floating shapes, orbiting torus knots, sparkles). Nothing in it respects prefers-reduced-motion.",
+    "Requires React 19 + r3f; every helper assumes the r3f store (useThree/useFrame) so nothing is reusable in a vanilla island without rewriting."
+  ],
+  "patterns_to_steal": [
+    "PerformanceMonitor hysteresis algorithm (bounds from measured refreshrate, 75% vote over 10x250ms windows, step factor, flipflops->onFallback) -> motion runtime: a ~80-line vanilla QualityGovernor driving dpr and particle count in our OGL/raw-WebGL island; telemetry logs the fallback event.",
+    "Preload (gl.compile before reveal) -> lazy-mount pattern: mount on intersection with rootMargin, compile and render one frame hidden, then crossfade poster->canvas so the user never sees the shader-compile stall.",
+    "AdaptiveDpr (dpr = initialDpr * quality) -> renderer config: dpr is a derived value, never set directly.",
+    "detect-gpu dependency idea (GPU tier from a benchmark table) -> eligibility: a client-side tier check that decides whether the WebGL island mounts at all or the poster stays; feed as a predicate input, not a model decision."
+  ],
+  "patterns_to_avoid": [
+    "Float / Sparkles / Stars / MeshDistortMaterial / MeshWobbleMaterial idle animations -> anti-slop tier-1 ban: perpetual sin/cos wobble of glossy primitives is the canonical AI-landing-page look and burns battery.",
+    "Environment presets from raw.githack.com -> third-party runtime dependency; all assets must be self-hosted through our object storage.",
+    "ScrollControls scroll hijacking -> breaks native scroll, Lenis, a11y; scroll-driven motion must read window scroll (or ScrollTimeline) and never own the scroller.",
+    "3D <Text> / Text3D -> typography belongs in HTML for SEO, a11y and the FactRegistry's quotable claims; never render copy inside a canvas.",
+    "Adopting drei at all inside an Astro island -> forces React + r3f + three (329 kB gzip measured), exceeding both the 140 kB section ceiling and the 180 kB page budget."
+  ],
+  "reusable_patterns": [
+    "HysteresisQualityMonitor: fps sampled in fixed windows, decisions made only when a supermajority of window averages cross refresh-rate-derived bounds, with a flip-flop counter that freezes a fallback.",
+    "CompileBeforeReveal: force GPU program compilation (gl.compile + one hidden frame) before swapping poster for canvas.",
+    "DerivedDpr: effective pixel ratio = clamp(devicePixelRatio) x quality factor, recomputed only when quality changes.",
+    "GpuTierGate: a lookup-table GPU tier (detect-gpu style) as an eligibility predicate for mounting heavy visual sections."
+  ],
+  "adoption_strategy": "Ignore — the library cannot be used inside our budget (React + r3f + three are prerequisites) and its signature helpers (Float, Sparkles, Environment presets, 3D Text) are exactly the visual idioms our anti-slop gate should ban. Copy only the PerformanceMonitor algorithm and the Preload compile-before-reveal step into our own vanilla motion runtime; both are under 100 lines and depend on nothing but rAF and a GL context.",
+  "recommendation": "Ignore",
+  "novelty_score": 3,
+  "difficulty_score": 2,
+  "pipeline_stages_affected": [
+    "motion",
+    "anti_slop",
+    "renderer",
+    "qa_gate"
+  ],
+  "evidence": [
+    "src/core/Float.tsx (useFrame sin/cos rotation and position.y wobble, Math.random() phase offset, no reduced-motion check)",
+    "src/core/PerformanceMonitor.tsx (ms=250, iterations=10, threshold=0.75, bounds=(refreshrate)=>refreshrate>100?[60,100]:[40,60], step=0.1, flipflops->onFallback)",
+    "src/core/AdaptiveDpr.tsx (setDpr(current * initialDpr))",
+    "src/core/Preload.tsx (gl.compile + WebGLCubeRenderTarget(128) CubeCamera warm-up in useLayoutEffect)",
+    "src/core/useEnvironment.tsx line 16 CUBEMAP_ROOT = https://raw.githack.com/pmndrs/drei-assets/.../hdri/ and src/helpers/environment-assets.ts preset->1k.hdr map",
+    "src/core/Text.tsx (troika-three-text + suspend-react)",
+    "src/web/ScrollControls.tsx (own overflow div + sticky fixed container, maath easing, range/curve/visible)",
+    "package.json dependencies (three-stdlib, troika-three-text, three-mesh-bvh, camera-controls, detect-gpu, hls.js, @mediapipe/tasks-vision, sideEffects:false)",
+    "Measured in scratchpad with esbuild: src/r3f-drei.jsx -> 1176.7 kB min / 328.9 kB gzip / 265.0 kB brotli; bundlephobia @react-three/drei 10.7.8 = 1575.6 kB min / 488.2 kB gzip"
+  ]
+}

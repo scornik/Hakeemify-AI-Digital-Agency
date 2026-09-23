@@ -1,0 +1,67 @@
+{
+  "repo": "mrdoob/three.js",
+  "url": "https://github.com/mrdoob/three.js",
+  "category": "3d-webgl",
+  "license": "MIT",
+  "stars": 115782,
+  "last_push": "2026-09-22",
+  "status_note": "active; r186 (0.186.0), monthly releases, dev branch; WebGPU renderer shipped as a parallel entry point",
+  "core_problem": "General-purpose 3D scene graph, materials, loaders and renderers (WebGL2 and WebGPU) for the browser.",
+  "architecture": "ESM source under src/ (core, math, materials, geometries, lights, loaders, textures, objects, renderers/{webgl,webgpu,common,webxr,shaders}, nodes/ with 239 files for the TSL node material system). Build entries in utils/build/rollup.config.js produce build/three.module.js (src/Three.js, classic WebGL), build/three.webgpu.js (src/Three.WebGPU.js), build/three.tsl.js and three.core.js; package.json exports map '.', './webgpu', './tsl', './addons/*' (= examples/jsm/*, 560 files: controls, loaders, postprocessing, environments, etc.), './src/*'. sideEffects is limited to ./src/nodes/**/* so the classic path is tree-shakeable in principle, but WebGLRenderer transitively imports the entire shader-chunk library, program cache, state, extensions, shadow map, cube/PMREM machinery and all built-in materials' uniforms, so the practical floor is large. src/renderers/webgpu/WebGPURenderer.js extends a common Renderer and picks WebGPUBackend when navigator.gpu exists or WebGLBackend (webgl-fallback) otherwise, with a forceWebGL parameter; materials on that path are Node materials (TSL). Addons model: examples/jsm is published but not part of the core API contract; three-stdlib exists because addons are not typed/tree-shaken as carefully. A repo-root llms.txt points to https://threejs.org/docs/llms.txt. AI wiring: none beyond llms.txt.",
+  "core_innovation": "A single scene-graph/material model that now compiles to both WebGL2 and WebGPU through a node-based shader language (TSL), while keeping the classic renderer as the default entry.",
+  "strengths": [
+    "De-facto standard: every loader, exporter and tool (Blender glTF, gltfjsx, Spline, Theatre r3f) targets it; skills are abundant.",
+    "Exports map cleanly separates classic ('three'), WebGPU ('three/webgpu') and TSL ('three/tsl') entry points, and addons are opt-in per file.",
+    "WebGPURenderer has an automatic WebGL2 backend fallback so one code path covers both APIs.",
+    "Excellent for build-time use: headless rendering (puppeteer/playwright) can bake posters, sprite sheets or WebM loops from a scene with zero runtime cost.",
+    "MIT, monthly releases, huge test/example corpus; PMREM/RoomEnvironment give studio lighting without external HDR files."
+  ],
+  "weaknesses": [
+    "Measured floor for a one-mesh WebGL scene: esbuild 519.5 kB min / 130.4 kB gzip / 107.8 kB brotli; rollup+terser with aggressive treeshake 508.4 kB min / 122.9 kB gzip / 100.3 kB brotli. MeshBasic vs MeshStandard changes it by <1%: the cost is WebGLRenderer itself, not materials.",
+    "The 140 kB hard ceiling is not achievable with three.js if measured minified (floor is 3.6x over); if measured as gzip transfer it leaves 10-17 kB for the entire island logic, poster swap, intersection code and assets, and consumes ~70% of the 180 kB page budget.",
+    "Hero-typical extras raise it further: GLTFLoader + RoomEnvironment + PMREM = 604 kB min / 153 kB gzip measured; WebGPU entry with one node material = 772 kB min / 212 kB gzip.",
+    "No visibility/intersection/reduced-motion awareness: setAnimationLoop keeps rendering until you stop it; nothing checks prefers-reduced-motion or document.hidden.",
+    "First render compiles GLSL programs on the main thread (tens of ms desktop, order of 100-300 ms on mid-range phones for a PBR material with shadows/env), which lands exactly where INP is measured unless warmed before reveal.",
+    "Continuous rendering at devicePixelRatio 3 on phones is a battery and thermal cost; the library gives no defaults for dpr caps, so budgets must be enforced by our code.",
+    "examples/jsm addons are unversioned relative to the API contract (breaking changes each release), hence three-stdlib forks; adds maintenance drag."
+  ],
+  "patterns_to_steal": [
+    "Entry-point split ('three' vs 'three/webgpu' vs 'three/tsl' in package.json exports) -> our section library: motion capability tiers as separate entry points so a section imports only the runtime it declares.",
+    "WebGPURenderer backend selection with getFallback -> renderer capability ladder for the WebGL island: try tier N, fall back deterministically, record which tier mounted in telemetry.",
+    "Build-time headless rendering (three + Playwright) -> art_direction/no_photo_fallback: bake abstract posters and 3-6 s WebM/AV1 loops from a parametrised scene at library time; runtime cost 0 kB JS.",
+    "PMREM + RoomEnvironment (no external HDR) -> if a WebGL section ever ships with three.js, lighting must come from generated environments, never remote HDRs."
+  ],
+  "patterns_to_avoid": [
+    "three.js as a runtime dependency of any V1 section -> 123-131 kB gzip / 508+ kB min floor breaks the 140 kB section ceiling and eats most of the 180 kB page budget.",
+    "WebGPU renderer path -> 212 kB gzip and only useful for effects that would look out of place on a service business site; not for V1.",
+    "examples/jsm addons in production without pinning -> API churn every monthly release.",
+    "setAnimationLoop without intersection + visibilitychange + reduced-motion gates -> continuous GPU work offscreen."
+  ],
+  "reusable_patterns": [
+    "CapabilityEntryPoints: ship separate package entries per rendering capability so consumers pay only for the tier they import.",
+    "BackendLadder: try the preferred backend, fall back deterministically, expose which one was chosen.",
+    "BakeAtLibraryTime: use the heavy 3D engine offline to produce static/video assets that ship with zero runtime JS.",
+    "SelfContainedLighting: generated environment maps (PMREM of a procedural room) instead of downloaded HDRs."
+  ],
+  "adoption_strategy": "Ignore as a runtime dependency; use only as a build-time tool. Answering the architect directly: the 140 kB ceiling is not achievable with three.js (measured floor 508 kB min / 123 kB gzip / 100 kB brotli before any scene code), so the <=1 WebGL section must be built on OGL (measured 47 kB min / 14 kB gzip / 12 kB brotli for a lit sphere) or raw WebGL (a fragment-shader plane is <10 kB), lazy-mounted on intersection behind a real rendered poster, with prefers-reduced-motion resolving to the poster only. For most design systems the better move is no WebGL at all: a pre-rendered WebM/AV1 loop (baked with three.js headless) or CSS 3D/SVG, which cost 0 kB JS and decode on the GPU. Reserve live WebGL as a signature move for `technical` and `cinematic` design systems with premium/challenger/luxury positioning; never for local_trust or volume_value.",
+  "recommendation": "Ignore",
+  "novelty_score": 5,
+  "difficulty_score": 8,
+  "pipeline_stages_affected": [
+    "motion",
+    "renderer",
+    "art_direction",
+    "design_system",
+    "qa_gate",
+    "anti_slop"
+  ],
+  "evidence": [
+    "package.json (r0.186.0; exports '.', './webgpu', './tsl', './addons/*' -> examples/jsm/*; sideEffects ['./src/nodes/**/*'])",
+    "utils/build/rollup.config.js lines 86-90 (three.module.js <- src/Three.js, three.webgpu.js <- src/Three.WebGPU.js, three.tsl.js <- src/Three.TSL.js)",
+    "git tree dev: src/renderers/{webgl,webgpu,common,webxr,shaders}, 43 files in src/renderers/webgpu, 239 in src/nodes, 560 in examples/jsm",
+    "src/renderers/webgpu/WebGPURenderer.js lines 2-69 (WebGLBackend fallback import, forceWebGL parameter, parameters.getFallback -> new WebGLBackend)",
+    "llms.txt (points to threejs.org/docs/llms.txt and llms-full.txt)",
+    "Measured in scratchpad: esbuild three-basic 519.5/130.4/107.8 kB, three-standard 524.2/131.4/108.6 kB, three-hero (GLTFLoader+RoomEnvironment+PMREM) 604.2/152.6/126.0 kB, three-webgpu 772.1/211.7/171.5 kB (min/gzip/brotli); rollup+terser three-basic 508.4/122.9/100.3 kB; ogl-min 46.8/13.6/11.6 kB",
+    "bundlephobia three@0.186.0 full namespace = 719.0 kB min / 180.6 kB gzip; ogl@1.0.11 = 128.3 kB min / 33.4 kB gzip"
+  ]
+}

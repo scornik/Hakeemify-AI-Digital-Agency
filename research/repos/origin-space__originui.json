@@ -1,0 +1,65 @@
+{
+  "repo": "origin-space/originui",
+  "url": "https://github.com/origin-space/originui",
+  "category": "ui-components",
+  "license": "AGPL-3.0-or-later (root LICENSE and packages/ui/package.json); the preserved legacy Origin UI snapshot under apps/origin carries its own MIT LICENSE.md ('Copyright (c) 2025 coss.com, Originally Copyright (c) 2025 Origin UI')",
+  "stars": 10617,
+  "last_push": "2026-09-22",
+  "status_note": "redirected: origin-space/originui now resolves to cosscom/coss (created 2024-10-15 as Origin UI, acquired by Cal.com, rebranded 'coss.com/ui (formerly Origin UI)'); root license changed to AGPL-3.0; the original Origin UI copy-paste collection survives as a 'legacy snapshot' in apps/origin (MIT, limited maintenance) and is still served at https://coss.com/origin; originui.com 301s to https://coss.com/ui",
+  "core_problem": "Originally: a large catalogue (646 registry items) of copy-paste Tailwind + React app-UI components following shadcn conventions. Now: Cal.com's official design system (coss ui) plus 508 'particles' (pattern examples) built on Base UI, distributed as a namespaced shadcn registry.",
+  "architecture": "Turborepo/Bun monorepo: apps/www (coss.com marketing), apps/ui (coss ui docs + registry.json, 577 items: 56 registry:ui, 508 registry:block 'particles' named p-<component>-<n>, 6 registry:lib, 3 registry:font, 2 registry:style, 2 registry:hook), apps/origin (the frozen Origin UI app + registry.json with 646 items: 600 registry:component demos, 40 registry:ui, 5 hooks, 1 lib), packages/ui (@coss/ui, version 0.0.0, private-ish workspace package exporting ./components/*, ./base-ui/*, ./hooks/*, ./lib/*, ./fonts, ./globals.css; deps: @base-ui/react 1.8.0, class-variance-authority, clsx, tailwind-merge, lucide-react, @hugeicons, next-themes, shiki; peer next ^16, react ^19, tailwindcss 4). Primitive base is Base UI (MUI's headless library), not Radix: components/button.tsx uses `useRender`/`mergeProps` from @base-ui/react and CVA variants with `data-pressed`, `data-loading`, `pointer-coarse:after:min-h-11` hit-target enlargement. Token contract is pure CSS custom properties in packages/ui/src/styles/globals.css: Tailwind v4 `@theme inline` maps `--color-*` to semantic vars (background/foreground/card/popover/primary/secondary/muted/accent/destructive/info/success/warning + foreground pairs, border/input/ring, chart-1..5, sidebar-*, code-*), `--radius-sm/md/lg/xl` derived from `--radius` by +-px, `--font-sans/--font-heading/--font-mono`, and a small motion set (`--animate-skeleton`, `--animate-caret-blink`, toast keyframes) with an explicit `@media (prefers-reduced-motion: reduce)` block that disables the toast animations. Light values are Tailwind palette references (`var(--color-neutral-800)`), dark values use `color-mix()` and `--alpha()` against neutral-950. The registry `registry:style` items ship the same cssVars plus a `css` block (`@layer base { * { @apply border-border outline-ring/50 } body { @apply bg-background text-foreground } }`), and `registry:font` items declare Google-provider fonts (Inter for sans and heading, Geist Mono) with `--font-*` variables. Distribution is a namespaced registry `@coss/<item>` (live at https://coss.com/ui/r/<name>.json with $schema ui.shadcn.com/schema/registry-item.json and inlined file content) consumed by `npx shadcn add @coss/button`; particles depend on ui items via `registryDependencies: ['@coss/accordion']`. The legacy apps/origin registry is Radix (`radix-ui` 27 items) + React Aria (`react-aria-components` 14) based, with tailwind keyframes for accordion in the item `tailwind.config`, and is explicitly marked 'support and maintenance are limited'. Cadence: ~40 commits May-Sep 2026, all on coss ui (Base UI bumps 1.5 -> 1.8, TanStack Table v9, DayPicker v10, new particles: calendar time input, team selector, gmaps autocomplete, weekly availability editor); 4 open issues, 540 forks.",
+  "core_innovation": "Nothing mechanically new: a shadcn-style registry whose headless base is Base UI instead of Radix, with a 'particles' layer of 508 pre-composed usage patterns per primitive and an unusually careful CSS-only token file (color-mix dark mode, reduced-motion opt-out, coarse-pointer hit targets).",
+  "strengths": [
+    "Token file is a good reference for CSS-only theming on Tailwind v4: semantic pairs plus info/success/warning roles, `--radius` derivation, fonts as `--font-*` vars, and reduced-motion handled in CSS rather than JS (packages/ui/src/styles/globals.css).",
+    "Registry usage is idiomatic and complete: registry:style carries cssVars + css, registry:font items declare font provider/variable/dependency, particles express `registryDependencies` on `@coss/*` items, so the whole design system is installable and dependency-graphed.",
+    "Base UI (`useRender` + `mergeProps`) instead of Radix `asChild` is a lighter, actively developed headless base; components use `data-*` state attributes (`data-pressed`, `data-loading`, `data-slot`) as the styling hooks.",
+    "Accessibility details baked into CSS: `pointer-coarse:after:min-h-11 min-w-11` enlarges touch targets to 44px without changing layout; focus-visible rings on tokens.",
+    "The legacy Origin UI catalogue (646 items, MIT) remains readable as a corpus of form/input/select/slider patterns and is served from coss.com/origin."
+  ],
+  "weaknesses": [
+    "AGPL-3.0 on the active code (root LICENSE, @coss/ui package.json). For a commercial agency product, copying coss ui component source into generated client sites makes each site a derivative work distributed under AGPL: the client site source must be offered under AGPL, and if the pipeline itself is a hosted service that incorporates coss code, the network-use clause (AGPL s.13) applies to the pipeline too. There is no dual/commercial license offered in the repo. Only apps/origin (legacy, MIT) is safe to copy.",
+    "Entirely app-UI oriented: inputs, selects, combobox, calendar, availability editor, sidebars, tables. Zero marketing sections, no motion/layout vocabulary; irrelevant to the section library.",
+    "React 19 + Next 16 peer dependencies and `'use client'` on every component; in Astro every interactive piece is a React island (React runtime ~45 kB gz + @base-ui/react), incompatible with the 180 kB budget for more than a couple of islands.",
+    "Design direction is a single Cal.com brand voice (neutral palette, Inter, Cal Sans); it is one design system, not a token system that can host many.",
+    "Legacy Origin UI snapshot is frozen ('maintenance limited'), still on Radix + React Aria mix, so the surviving MIT corpus will bit-rot.",
+    "Registry items are unversioned (`latest` only); no changelog per item, no content hashes."
+  ],
+  "patterns_to_steal": [
+    "CSS-only reduced-motion opt-out inside the token file (`@media (prefers-reduced-motion: reduce) { :where(.animate-*) { animation: none } }`) → motion layer: every design_system token file must ship the same block covering all `--animate-*` tokens so the QA gate can assert it statically.",
+    "Coarse-pointer hit-target enlargement via pseudo-element (`pointer-coarse:after:min-h-11 min-w-11`) → renderer button/link primitives; satisfies WCAG 2.5.8 target size without layout changes.",
+    "Dark-mode values derived with `color-mix()`/`--alpha()` from a single neutral base rather than a second hand-authored palette → design_system token compiler: derive dark scheme from light tokens deterministically where art direction allows.",
+    "registry:font items with provider/import/variable/dependency → SectionLibrary manifest: model fonts as first-class items with a `--font-*` variable contract so eligibility can gate typography by design system.",
+    "Particles naming (`p-<primitive>-<n>` with `categories` and `registryDependencies`) → arrangements: a section variant's arrangements are exactly this shape, keep the flat numbered naming plus human-authored `signature_move`."
+  ],
+  "patterns_to_avoid": [
+    "Copying any coss ui (@coss/*) component source into client sites → AGPL-3.0 contamination of client deliverables and potentially of the hosted pipeline; no commercial license available.",
+    "Using the React/Base UI components as the runtime for sections → React island per component, `'use client'` everywhere, Next 16 peer dep; violates the near-zero-JS Astro constraint.",
+    "Adopting a single-brand token set (Cal.com neutral/Inter) as our default design system → it is one aesthetic; our design systems must be many, with visual_dna, and selected by id.",
+    "Building on the legacy apps/origin corpus → frozen Radix + React Aria mix with limited maintenance; MIT but bit-rotting and still app-UI only."
+  ],
+  "reusable_patterns": [
+    "ReducedMotionInTokens: declare motion tokens and their reduced-motion kill switch in the same CSS file so the rule is static and auditable.",
+    "CoarsePointerHitTarget: enlarge touch targets with an absolutely positioned pseudo-element under `pointer: coarse` instead of changing box size.",
+    "DerivedDarkScheme: compute dark tokens from light tokens with color-mix/alpha rather than authoring two palettes.",
+    "NumberedPatternRegistry: pre-composed usage patterns per primitive as numbered registry blocks with categories and registryDependencies.",
+    "LicenseFenceByDirectory: keep a legacy MIT snapshot in a separate app with its own LICENSE.md inside an otherwise AGPL monorepo (a warning to check license per path, not per repo)."
+  ],
+  "adoption_strategy": "Ignore. Nothing here is marketing-oriented, the active code is AGPL-3.0 with no commercial option, and the runtime is React 19 + Base UI + Next 16. Do not copy any @coss/* source into the pipeline or into client sites. Lift only the license-free CSS ideas (reduced-motion block in the token file, coarse-pointer hit targets, color-mix dark derivation, font items as registry entries) and re-author them in our own token compiler; if a form-heavy client page ever needs a reference for input/select/combobox patterns, consult the MIT apps/origin snapshot at coss.com/origin, not the coss ui package.",
+  "recommendation": "Ignore",
+  "novelty_score": 2,
+  "difficulty_score": 2,
+  "pipeline_stages_affected": ["design_system", "motion", "qa_gate"],
+  "evidence": [
+    "raw/origin-space_originui/meta.json (full_name cosscom/coss, license AGPL-3.0, 10617 stars, pushed 2026-09-22, description 'coss.com/ui is the official design system of Cal.com')",
+    "cosscom/coss README.md ('coss.com/ui (formerly Origin UI)'; apps/origin described as 'Legacy Origin UI components (pre-acquisition)')",
+    "cosscom/coss LICENSE (GNU Affero General Public License v3) and packages/ui/package.json ('license': 'AGPL-3.0-or-later', name @coss/ui, deps @base-ui/react 1.8.0, peer next ^16.2.5 react ^19.2.6 tailwindcss 4)",
+    "apps/origin/README.md ('Legacy snapshot ... preserved, pre-acquisition version of Origin UI (Radix-based, shadcn-style) ... support and maintenance are limited') and apps/origin/LICENSE.md (MIT, 'Originally Copyright (c) 2025 Origin UI')",
+    "apps/origin/registry.json (name 'originui', 646 items: 600 registry:component, 40 registry:ui, 5 registry:hook, 1 registry:lib; deps radix-ui 27, react-aria-components 14; accordion item carries tailwind keyframes)",
+    "apps/ui/registry.json (name 'coss ui', 577 items: 56 registry:ui, 508 registry:block particles p-<component>-<n>, registry:style with cssVars+css, registry:font font-sans/font-heading/font-mono; deps lucide-react 112, @base-ui/react 49)",
+    "packages/ui/src/styles/globals.css (@theme inline semantic color map incl. info/success/warning, --radius derivation, --animate-* tokens with @keyframes, @media (prefers-reduced-motion: reduce) block, :root values via var(--color-neutral-*) and dark via color-mix/--alpha)",
+    "packages/ui/src/components/button.tsx (Base UI useRender/mergeProps, CVA variants, data-pressed/data-loading, pointer-coarse:after:min-h-11)",
+    "packages/ui/src/base-ui/ (csp-provider, direction-provider, merge-props, use-render re-exports)",
+    "commit log 2026-05 to 2026-09 (Base UI 1.5 -> 1.8, TanStack Table v9, DayPicker v10, new particles); repo stats: 4 open issues, 540 forks",
+    "live checks: https://coss.com/origin -> 200, https://originui.com -> 301 https://coss.com/ui, https://coss.com/ui/r/button.json -> shadcn registry-item with inlined content and registryDependencies ['@coss/spinner']"
+  ]
+}

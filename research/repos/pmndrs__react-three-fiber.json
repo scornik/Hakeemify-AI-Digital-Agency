@@ -1,0 +1,67 @@
+{
+  "repo": "pmndrs/react-three-fiber",
+  "url": "https://github.com/pmndrs/react-three-fiber",
+  "category": "3d-webgl",
+  "license": "MIT",
+  "stars": 32424,
+  "last_push": "2026-09-22",
+  "status_note": "active; v9.8.0 pairs with React 19 only (peer react >=19 <19.4, three >=0.156)",
+  "core_problem": "Expresses a three.js scene graph as React components via a custom react-reconciler, so scene state participates in React state, Suspense and concurrent scheduling instead of imperative mutation.",
+  "architecture": "packages/fiber/src/core/reconciler.tsx is a react-reconciler host config that maps JSX tags (<mesh>) to `new THREE.Mesh()` via a catalogue built by extend(); web/Canvas.tsx calls extend(THREE) on the whole namespace, measures its container with react-use-measure, creates a root with createRoot(canvas).configure({gl,dpr,frameloop,performance,...}) and renders children inside its own ErrorBoundary + Suspense, with a `fallback` prop for no-WebGL. core/store.ts is a zustand store (RootState) holding gl/scene/camera/size/viewport, `frameloop: 'always'|'demand'|'never'`, `dpr` (number or [min,max] clamped by calculateDpr against window.devicePixelRatio) and a `performance` object {current,min:0.5,max:1,debounce:200,regress()} where regress() drops current to min and a setTimeout restores max after debounce ms. core/loop.ts is one shared requestAnimationFrame loop over all roots: update() runs useFrame subscribers then gl.render, decrements state.internal.frames, and the loop cancels itself when no root has frames left; invalidate(state, frames) sets frames=1 (or 2 when called inside useFrame) and restarts the loop; advance() drives frameloop='never' manually; addEffect/addAfterEffect/addTail are global before/after/idle hooks. core/events.ts does raycast-based pointer events. AI wiring: none.",
+  "core_innovation": "A React reconciler whose render loop is demand-driven by a per-root frame counter, letting a declarative 3D tree go completely idle when nothing invalidates it.",
+  "strengths": [
+    "frameloop='demand' + invalidate() is a clean idle-by-default model: the rAF loop is cancelled when repeat===0 (loop.ts), so a settled scene costs zero CPU/GPU.",
+    "performance.regress() with debounce (store.ts) is a tiny, general 'quality governor' contract: producers call regress(), consumers read performance.current and scale dpr/effects; nothing happens unless a consumer opts in.",
+    "dpr=[min,max] clamp (calculateDpr) is the right default for phones with devicePixelRatio 3.",
+    "Canvas `fallback` prop and ErrorBoundary wrap give a defined no-WebGL path.",
+    "docs/advanced/scaling-performance.mdx documents movement regression, instancing, LOD (<Detailed>), nested Suspense loading: a good checklist for our motion budget rules.",
+    "Actively maintained, MIT, large ecosystem."
+  ],
+  "weaknesses": [
+    "Measured cost (esbuild, minified, production): a Canvas with one lit icosahedron = 1119 kB min / 309 kB gzip / 248 kB brotli. The total site JS budget is 180 kB; this single island is 1.7x that.",
+    "web/Canvas.tsx calls extend(THREE as any) on the full namespace, so three.js cannot be tree-shaken at all in the default path (719 kB min); you would need createRoot + a hand-built catalogue to get back to the ~508 kB three floor.",
+    "Requires react + react-dom/client in the island (~45 kB gzip on their own) and a React-19-exact peer range; an Astro island with r3f is the heaviest island type we could ship.",
+    "No prefers-reduced-motion handling anywhere in loop.ts/Canvas.tsx; frameloop='always' is the default and keeps rendering offscreen and in background tabs (no IntersectionObserver or visibilitychange gating).",
+    "First frame still pays WebGLRenderer construction + shader compile on the main thread (no built-in warm-up; drei's Preload does gl.compile).",
+    "Event system raycasts on every pointermove by default; on a marketing page this is wasted main-thread work."
+  ],
+  "patterns_to_steal": [
+    "Demand-driven frame counter (loop.ts invalidate/frames/cancelAnimationFrame) -> motion runtime for our single WebGL island: render only when a scroll/intersection/pointer event invalidates; go idle otherwise.",
+    "performance.regress()/current/debounce contract (store.ts) -> motion budget: our island exposes one `quality` number that dpr, particle count and effects derive from; scroll/resize call regress().",
+    "dpr=[min,max] clamp (calculateDpr) -> renderer config: hard-cap dpr at 1.5 on mobile, 2 on desktop, as a design-system motion token.",
+    "Canvas `fallback` + ErrorBoundary -> lazy-mount pattern: the static poster is the fallback and stays in the DOM until the first frame has rendered.",
+    "addTail (callback when rendering stops) -> telemetry: record idle/active ratio of the WebGL section as a motion-budget metric."
+  ],
+  "patterns_to_avoid": [
+    "Shipping React + r3f as an Astro island -> 309 kB gzip measured minimum breaks the 180 kB total JS budget and the 140 kB section ceiling on its own.",
+    "extend(THREE) whole-namespace catalogue -> defeats tree-shaking; any renderer we write must import only the classes it uses.",
+    "frameloop='always' default -> continuous rAF at device dpr is the battery drain the architect's motion budget forbids.",
+    "Raycast pointer events on the scene -> hover-reactive 3D on a marketing site is an AI-slop tell and costs main thread per pointermove."
+  ],
+  "reusable_patterns": [
+    "DemandFrameLoop: a rAF loop that keeps a per-root pending-frame counter, renders while >0, and cancels itself at 0; producers call invalidate().",
+    "QualityGovernor: a single normalized `current` in [min,max] that regress() drops and a debounced timer restores; consumers derive dpr/effects from it.",
+    "ClampedDpr: dpr resolved as clamp(devicePixelRatio, min, max) from a token, never raw devicePixelRatio.",
+    "PosterFallbackSlot: the static poster is the canvas's declared fallback and is only swapped out after the first rendered frame or on GL failure."
+  ],
+  "adoption_strategy": "Adapt — do not ship the library. Re-implement DemandFrameLoop, QualityGovernor and ClampedDpr (together under 150 lines of TypeScript) inside our own vanilla WebGL/OGL island so the <=1 WebGL section is idle-by-default and dpr-capped. Keep r3f only as a reference for the docs/advanced/scaling-performance.mdx checklist when writing motion-budget rules. If a design system ever justifies a React 3D island, it must use createRoot with a minimal catalogue, not <Canvas>, and still cannot meet 140 kB with three.js.",
+  "recommendation": "Adapt",
+  "novelty_score": 6,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": [
+    "motion",
+    "renderer",
+    "qa_gate",
+    "design_system"
+  ],
+  "evidence": [
+    "packages/fiber/src/core/loop.ts (invalidate, frames counter, cancelAnimationFrame when repeat===0, addTail)",
+    "packages/fiber/src/core/store.ts lines 42-51 and 204-221 (performance.current/min/max/debounce/regress with setTimeout restore)",
+    "packages/fiber/src/core/utils.tsx calculateDpr (clamp of window.devicePixelRatio to [min,max])",
+    "packages/fiber/src/web/Canvas.tsx (extend(THREE as any), useMeasure, createRoot().configure(), fallback, ErrorBoundary + Suspense)",
+    "packages/fiber/package.json (v9.8.0, peer react >=19 <19.4, deps zustand/its-fine/suspend-react/react-use-measure/scheduler)",
+    "docs/advanced/scaling-performance.mdx (on-demand rendering, movement regression, PerformanceMonitor, instancing, LOD)",
+    "docs/API/canvas.mdx (frameloop default 'always', dpr default [1,2], fallback prop)",
+    "Measured in scratchpad with esbuild: src/r3f-min.jsx -> 1119.2 kB min / 308.7 kB gzip / 247.9 kB brotli; bundlephobia @react-three/fiber 9.7.0 = 159.5 kB min / 50.6 kB gzip excluding three and react"
+  ]
+}

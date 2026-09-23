@@ -1,0 +1,61 @@
+{
+  "repo": "keystonejs/keystone",
+  "url": "https://github.com/keystonejs/keystone",
+  "category": "cms",
+  "license": "MIT",
+  "stars": 9977,
+  "last_push": "2026-09-14",
+  "status_note": "active but low-velocity: @keystone-6/core 8.1.0 on Prisma 7 / Next 16 / React 19; releases 2026-08-18, 08-20, 08-31; maintained by Thinkmill; 141 open issues, small community.",
+  "core_problem": "Schema-as-code CMS: define lists with typed field functions, access control and hooks in TypeScript; Keystone prints a Prisma schema, generates a GraphQL API with @graphql-ts, and serves a Next.js admin UI.",
+  "architecture": "packages/core/src/schema.ts exports config({db, lists, session, ui}), list({fields, access, hooks, ui, db, graphql, isSingleton}), group(), action(). Fields are functions (text(), relationship(), select(), json(), image()...) returning FieldTypeFunc that declare a Prisma column kind and GraphQL input/output (types/next-fields.ts). initialise-lists.ts resolves lists into an InitialisedList graph; prisma-schema-printer.ts emits schema.prisma from lists; graphql.ts builds the schema; lib/core/mutations,queries implement resolvers. Access control (types/config/access-control.ts) is three-tier: operation (boolean per query/create/update/delete), filter (returns boolean or a `where` filter merged into the query), item (per-item boolean with inputData/item), plus field-level read/create/update. Hooks (types/config/hooks.ts, lib/core/hooks.ts): resolveInput (transform input) -> validate (receives addValidationError(msg), can be split per create/update/delete) -> beforeOperation -> afterOperation, at list and field level; errors accumulate into a GraphQL validation error. Context (types/context.ts) exposes context.db.<List>.findMany/createOne (typed, bypasses GraphQL) and context.query (GraphQL-shaped) with sudo(). The document field (packages/fields-document) is a Slate editor storing Slate JSON with componentBlocks (component({schema: fields.object/array/conditional/child/relationship/form, preview})) and a separate `structure` field (structure.ts) that stores an arbitrary typed JSON tree described by a ComponentSchema, validated with assertValidComponentSchema and given generated GraphQL input/output types — effectively a runtime schema DSL for typed JSON columns. Rendering is via @keystone-6/document-renderer (React). Admin UI is Next.js + @keystar/ui (react-aria).",
+  "core_innovation": "Lists-as-code that print a Prisma schema and derive a fully typed GraphQL API, with a three-tier (operation/filter/item) access model and a `structure` field that turns a declarative component schema into a validated JSON column with generated GraphQL types.",
+  "strengths": [
+    "Closest to our approach among the CMSs: the schema is plain TypeScript functions, Prisma is the migration/ORM layer, and context.db gives a typed data API without GraphQL.",
+    "Three-tier access model (operation boolean, filter-as-where, item predicate) is a clean generalization that maps directly onto row-level tenant isolation (filter returns {site: {id: {equals: tenant}}}).",
+    "validate hook with addValidationError accumulates multiple errors per operation instead of throwing on the first; hooks split by create/update/delete.",
+    "`structure` field: a declarative ComponentSchema (object/array/conditional/form/relationship) produces a validated JSON column plus GraphQL input/output types — a proof that a Zod-like runtime schema can drive storage, validation and API without per-block tables.",
+    "MIT, small surface, Postgres/SQLite/MySQL via Prisma, already on Prisma 7."
+  ],
+  "weaknesses": [
+    "Momentum: ~10k stars, releases cluster around a few weeks, Thinkmill-driven; ecosystem is thin (few plugins, no SEO/redirects/multi-tenant packages, no versions/drafts, no live preview, no jobs).",
+    "No versioning or draft/publish primitives at all — would have to be built (which we must do anyway).",
+    "Admin UI and document field are React/Next-bound (Next 16 peer); the document field is Slate (custom editor stack), heavier to reuse than Lexical-based ones.",
+    "GraphQL-first API adds a schema layer we do not need for a deterministic pipeline; context.db exists but the mental model is GraphQL.",
+    "Prisma as ORM vs our Drizzle choice: adopting Keystone means adopting Prisma's migration workflow and client generation."
+  ],
+  "patterns_to_steal": [
+    "Three-tier access (operation / filter-as-where / item) -> Drizzle query helpers: `scopeToSite(query, siteId)` filter layer + per-row predicate for owner-editable fields; the same predicate language as Eligibility can express access (multi-tenancy / cms).",
+    "validate hook with addValidationError accumulation split by operation -> the SiteDefinition invariant runner collects all violations (unquotable fact, rights unknown, missing requires) and returns them together for the Gap Report instead of failing on the first (fact_registry / qa_gate / gap report).",
+    "structure field ComponentSchema (object/array/conditional/relationship) validated at boot with assertValidComponentSchema -> validate the section library YAML against the Zod schema at boot and fail fast; keep SiteDefinition as one validated JSON column rather than normalized tables (renderer / section library).",
+    "prisma-schema-printer: derive the DB schema from the code schema, never the reverse -> Drizzle schema derived from the same TS module that exports the Zod contracts (cms)."
+  ],
+  "patterns_to_avoid": [
+    "Adopting Keystone as the runtime -> brings Prisma + GraphQL + Next admin for zero versioning/draft features; we would build the important parts ourselves anyway.",
+    "Slate document field with componentBlocks as section content -> free rich text with embedded components again invites unquotable copy; sections bind to facts.",
+    "GraphQL as the internal pipeline API -> unnecessary indirection for deterministic code calling a typed repository."
+  ],
+  "reusable_patterns": [
+    "ThreeTierAccess: operation boolean, filter-as-where, item predicate, plus field-level read/write.",
+    "AccumulatingValidateHook: validators call addValidationError and the operation fails with the full list.",
+    "SchemaDrivenJsonColumn: a declarative component schema validated at boot that types, validates and exposes a JSON column.",
+    "CodeSchemaPrintsDbSchema: TS list definitions are the single source from which the ORM schema is printed."
+  ],
+  "adoption_strategy": "Ignore as a runtime (low momentum, no versions/drafts/live preview, Prisma+GraphQL+Next stack) but adapt three mechanisms into the plain Postgres+Drizzle+Zod design: the three-tier access model for site scoping, the accumulating validate hook for the invariant runner and Gap Report, and the `structure` field's schema-driven JSON column as the justification for storing SiteDefinition as one validated JSONB document. Its schema-as-code is indeed closer to our Zod approach than Payload's field-object config, but that closeness is an argument for writing our own thin layer, not for adopting Keystone.",
+  "recommendation": "Ignore",
+  "novelty_score": 4,
+  "difficulty_score": 2,
+  "pipeline_stages_affected": [
+    "cms",
+    "fact_registry",
+    "qa_gate"
+  ],
+  "evidence": [
+    "LICENSE (MIT, Thinkmill Labs), packages/core/package.json (@keystone-6/core 8.1.0; peers prisma ^7.9, next ^16, react ^19, pg/mariadb/better-sqlite3), release dates via gh api releases (2026-08-18/20/31), last commit 2026-09-14",
+    "packages/core/src/schema.ts (config/list/group/action exports), packages/core/src/types/config/lists.ts (ListConfig: fields/access/hooks/ui/db/graphql/isSingleton)",
+    "packages/core/src/types/config/hooks.ts (resolveInput/validate/beforeOperation/afterOperation split per operation; addValidationError), packages/core/src/lib/core/hooks.ts",
+    "packages/core/src/types/config/access-control.ts (ListOperationAccessControl, ListFilterAccessControl returning boolean|where, ListItemAccessControl with inputData, FieldAccessControl)",
+    "packages/core/src/lib/core/prisma-schema-printer.ts, initialise-lists.ts, packages/core/src/types/next-fields.ts (fieldType kinds)",
+    "packages/fields-document/src/structure.ts (StructureFieldConfig{schema: ComponentSchema}, assertValidComponentSchema, Json scalar with generated GraphQL IO), component-blocks.tsx (component/fields API), docs/content/docs/fields/document.md",
+    "docs/content/docs/config/lists.md, docs/content/docs/config/hooks.md"
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "repo": "directus/directus",
+  "url": "https://github.com/directus/directus",
+  "category": "cms",
+  "license": "MSCL-1.0-GPL (Monospace Sustainable Core License 1.0, derived from the Fair Core License; converts to GPL-3.0 four years after each release). NOT BSL 1.1 anymore: the LICENSE file is copyright 2026 Monospace Inc. README: free for orgs under $5M revenue and 50 employees via an 'Open Innovation Grant' license key; a key-less 'Free Core Tier' exists with entitlement limits enforced in code.",
+  "stars": 37946,
+  "last_push": "2026-09-23",
+  "status_note": "active (api 39.2.0); license changed from BSL 1.1 to MSCL 1.0 with runtime license-key entitlement checks (api/src/license/*).",
+  "core_problem": "Wrap any existing SQL database with a metadata layer (collections/fields/relations tables) and get instant REST/GraphQL APIs, a Vue admin app, permissions, event-driven Flows and an extension system — data-model-first rather than code-first.",
+  "architecture": "Express + Knex API (api/src). Schema = introspected SQL tables (@directus/schema, packages/schema) overlaid with `directus_collections`/`directus_fields`/`directus_relations` metadata: Field = {collection, field, type, schema: Column|null, meta: FieldMeta|null} where FieldMeta carries interface, display, options, conditions, validation (a Filter AST), validation_message, special[], readonly/required (packages/types/src/fields.ts); CollectionMeta has singleton, versioning, autosave_revision_interval, archive_field, preview_url, status active|inactive (packages/types/src/collection.ts). Queries compile to an AST (database/get-ast-from-query) then to Knex (database/run-ast). Events: an Emitter with emitFilter (mutating, awaited chain), emitAction (fire-and-forget) and emitInit (api/src/emitter.ts). Flows (api/src/flows.ts FlowManager): Flow{trigger: event|schedule|operation|webhook|manual, options, operation} where operations form a graph of Operation{type, options, resolve: Operation|null, reject: Operation|null}; executeOperation runs each operation and follows resolve or reject; data is keyed ($trigger, $last, operation keys) and templated into options; built-in operations under api/src/operations: condition (Filter AST validated with joi via validatePayload), transform, request, exec (isolated-vm sandbox), item-create/read/update/delete, mail, notification, log, sleep, throw-error, trigger. Extensions (packages/types/src/extensions): app types interfaces/displays/layouts/modules/panels/themes, API types hooks (register.filter/action/init/schedule/embed), endpoints, operations; bundles; loaded by api/src/extensions/manager.ts with a sandbox option. Content Versions (packages/types/src/versions.ts, api/src/services/versions.ts): ContentVersion{key, collection, item, hash, delta} stores a delta branch per item; save() merges deltas and writes revisions; promote() applies the delta to the main item; a hash of the main item detects staleness (`outdated`). Visual editing (packages/visual-editing): a frontend script parses `data-directus` attributes into EditConfig{collection,item,fields,mode}, draws overlays, and talks to the admin iframe via postMessage actions (connect, checkFieldAccess, edit, navigation, addToContext / confirm, activateElements, saved, highlightElement). License entitlements (api/src/license/entitlements/lib): countActiveCollections, countActiveFlows, seats, sso-enabled, custom-permission-rules-enabled, custom-llms-enabled; compute-license-status returns active|grace|locked and resolveCollections/resolveFlows set items to inactive when over the limit.",
+  "core_innovation": "Treat the existing SQL schema as the source of truth and layer editable metadata, permissions and an operation-graph automation engine (Flows with resolve/reject edges) on top, instead of generating the database from code.",
+  "strengths": [
+    "Data-model-first: any Postgres schema we own (sites, facts, versions) could be administered without a code schema; introspection means zero lock-in of the DB shape.",
+    "Flows' operation graph with explicit resolve/reject successors and keyed data ($trigger/$last) is a clean, inspectable automation DSL; the `condition` operation reuses the same Filter AST as permissions and validation.",
+    "Content versions as deltas with a main-item hash for staleness detection and explicit promote(): a lighter model than full snapshots when documents are large.",
+    "Visual-editing SDK is decoupled from the admin: attribute-encoded EditConfig on DOM nodes + a postMessage bus, framework-agnostic (would work in Astro).",
+    "FieldMeta.validation as a Filter AST + validation_message: declarative, storable, UI-editable validation rules.",
+    "Multi-storage drivers, Redis/memory stores, websocket subscriptions, MCP OAuth service, isolated-vm sandbox for untrusted extension code."
+  ],
+  "weaknesses": [
+    "License: MSCL 1.0 is source-available, not OSI open source; 'Competing Use' excludes offering Directus itself as a hosted product; license-key entitlements are enforced at runtime (collections/flows/seats counted; over-limit -> 'locked' and collections switched to inactive). An agency store with many tenant collections or per-client flows can hit Free Core Tier limits; the $5M/50-employee grant requires applying for a key.",
+    "Multi-tenancy is not first-class: isolation is by policies/permissions with filter rules per role; no tenant field/list-filter kit like Payload's plugin; per-tenant collections would explode the licensed collection count.",
+    "SQL-first model fights a document-shaped SiteDefinition: nested sections/arrangements/slots must be either a JSON column (opaque to Directus' interfaces/validation) or normalized into relational many-to-any junction tables that the 'builder' interface uses — its analogue of typed block lists, far weaker than Zod/Payload blocks (no per-block schema generation, no allow-list per context).",
+    "Heavy runtime: Express+Knex API plus a Vue 3 admin SPA, Redis for multi-instance; extension authoring is Vue-specific for app extensions.",
+    "Flows are stored in DB rows, edited in a canvas UI, not code-reviewable YAML; `exec` operations run arbitrary JS in isolated-vm — the opposite of our authored, versioned playbooks.",
+    "Validation is a Filter AST, not a type system: cannot express cross-entity invariants like 'slot fact must be quotable' without hook extensions in JS."
+  ],
+  "patterns_to_steal": [
+    "Operation graph with resolve/reject edges and keyed data ($trigger, $last, <opKey>) -> the agency pipeline runner: each stage (eligibility, creative direction, assembly, anti-slop, launch QA) is an operation with a reject edge to a Gap Report / retry stage; the graph is data (YAML), inspectable, and produces the Decision Manifest trace (agent_orchestration).",
+    "Content-version delta + main-item hash + promote() -> owner edits post-V1 stored as deltas against a pinned published SiteDefinition; staleness detected by hash before promote (versions + pinning).",
+    "Attribute-encoded EditConfig (`data-directus=\"collection:item:fields\"`) + overlay manager + postMessage bus -> `data-slot=\"sections[i].slots.headline\"` emitted by the Astro renderer so a post-V1 editor can click-to-edit without the renderer knowing about the editor (visual_editor).",
+    "Filter-AST validation stored on field metadata with validation_message -> store per-slot constraints (max chars, allowed marks, required fact kinds) as data in the section library YAML rather than code (section library / anti_slop tier 1).",
+    "emitFilter (awaited, mutating chain) vs emitAction (side effects) distinction -> gates are filters (can reject/transform), telemetry are actions (never block) (qa_gate / telemetry)."
+  ],
+  "patterns_to_avoid": [
+    "Running Directus as the agency store -> MSCL license-key entitlements and Competing-Use ambiguity for a hosted multi-tenant product; runtime lock-out risk when collections/flows exceed the tier.",
+    "DB-stored, canvas-edited Flows with `exec` JS -> our playbooks must be authored YAML, versioned and human-reviewed; no runtime-editable automation.",
+    "Many-to-any 'builder' junction tables as the block list -> loses typed variants and allow-lists; SiteDefinition stays a Zod-validated JSON document.",
+    "Introspection-driven metadata (schema defined in the DB, not code) -> our contract must be code (Zod) shared by AI, renderer and editor."
+  ],
+  "reusable_patterns": [
+    "ResolveRejectOperationGraph: automation as a graph of operations each with success and failure successors, data keyed by operation key.",
+    "DeltaVersionBranch: named version = delta over a main item plus a hash of main for conflict detection, promoted explicitly.",
+    "AttributeEncodedEditTarget: DOM attributes carrying collection/item/fields so an overlay editor can attach to any rendered page.",
+    "FilterOrAction: two event kinds — awaited filters that may mutate/reject, fire-and-forget actions that only observe.",
+    "MetadataOverIntrospectedSchema: editable meta tables layered on an introspected SQL schema."
+  ],
+  "adoption_strategy": "Ignore as a store or runtime — the 2026 MSCL license (source-available, license-key entitlements that lock collections/flows when over the free tier, Competing-Use clause) is a poor fit for a multi-tenant agency platform, and its SQL-first metadata model does not express a typed, allow-listed section contract. Take three patterns only: the resolve/reject operation graph as the shape of our YAML pipeline runner, delta+hash versioning for post-V1 owner edits, and attribute-encoded edit targets emitted by the Astro renderer for the future editor.",
+  "recommendation": "Ignore",
+  "novelty_score": 5,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": [
+    "cms",
+    "agent_orchestration",
+    "visual_editor"
+  ],
+  "evidence": [
+    "license (MSCL-1.0-GPL text: Permitted Purpose/Competing Use, license-key Limitations, GPL-3.0 after 4 years) and readme.md License section ($5M/50 employees grant, Free Core Tier)",
+    "api/src/license/entitlements/lib/collections.ts, flows.ts and api/src/license/utils/compute-license-status.ts (countActiveCollections/Flows, active|grace|locked, resolveCollections sets status inactive)",
+    "api/package.json (@directus/api 39.2.0, knex, express, isolated-vm, joi, zod)",
+    "packages/types/src/fields.ts (FieldMeta.validation Filter, interface/display/options/conditions), packages/types/src/collection.ts (CollectionMeta.versioning, singleton, status)",
+    "api/src/flows.ts (FlowManager: triggers event/schedule/operation/webhook/manual, executeOperation resolve/reject, $trigger/$last), packages/types/src/flows.ts (Flow/Operation types), api/src/operations/condition/index.ts, api/src/operations/transform/index.ts",
+    "api/src/emitter.ts (emitFilter/emitAction/emitInit), packages/types/src/extensions/hooks.ts and index.ts (register.filter/action/init/schedule/embed; interfaces/displays/layouts/modules/panels/operations/endpoints/themes)",
+    "api/src/services/versions.ts (delta save, revisions merge, promote, hash/outdated), packages/types/src/versions.ts (ContentVersion)",
+    "packages/visual-editing/src/index.ts, src/lib/types/directus.ts (EditConfig, ReceiveAction/SendAction postMessage protocol)",
+    "packages/schema-builder/src/builder.ts (SchemaOverview builder)"
+  ]
+}

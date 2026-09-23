@@ -1,0 +1,64 @@
+{
+  "repo": "browserbase/stagehand",
+  "url": "https://github.com/browserbase/stagehand",
+  "category": "browser-qa",
+  "license": "MIT",
+  "stars": 25256,
+  "last_push": "2026-09-23",
+  "status_note": "active; v4.0.0 monorepo (pnpm/turbo) with TS, Python and Go SDKs generated from one Zod protocol; v4 removed agent() and local caching in favour of Browserbase-hosted server-side cache; the runtime is a Chrome-extension service worker ('understudy') driven over JSON-RPC, so it no longer sits on top of Playwright",
+  "core_problem": "Give scripts three natural-language primitives over a real browser (act, extract, observe) that resolve to concrete selectors and schema-validated data, so LLM judgement is spent only where a page needs it and everything else stays plain code.",
+  "architecture": "packages/protocol: schemas.ts (Zod) is the single source of truth; schema-registry.ts binds schemas to JSON-RPC methods (StagehandMethods) and notifications; build-json-rpc-schema.ts emits stagehand.v4.json from which Python models and Go structs are generated. ActionSchema = {selector (css or xpath=...), description, method?, arguments?[]} is the interchange type: observe() returns Action[], act() accepts a string instruction or an Action. packages/extension is the runtime: understudy/ reimplements a Playwright-like Page/Frame/Locator over raw CDP (cdp.ts, frameRegistry.ts, executionContextRegistry.ts, locator.ts, deepLocator.ts for shadow/iframe piercing, networkManager.ts, lifecycleWatcher.ts, domainPolicy.ts); understudy/a11y/snapshot/ builds the model-facing page state: a11yTree.ts calls Accessibility.getFullAXTree per frame, decorateRoles (scrollable and file-input markers, tagName for generic nodes), buildHierarchicalTree prunes structural roles (generic/none/inlinetextbox) and redundant static text, treeFormatUtils.formatTreeLine renders `[ordinal-backendNodeId] role: name [checked]` lines, injectSubtrees nests iframe outlines, diffCombinedTrees returns only new lines; domTree.ts walks DOM.getDocument to produce xpathMap {encodedId -> absolute xpath}, tagNameMap and scrollableMap; capture.ts merges everything into page.snapshot() -> {formattedTree, xpathMap}. services/observeService.ts sends the outline to the model and maps returned element ids back through xpathMap into Action[] with `xpath=` selectors; services/actService.ts: act(string) -> waitForDomNetworkQuiet -> withCache -> runActPipeline (observe-style inference -> takeDeterministicAction via performUnderstudyMethod on a Playwright-style locator method) with selfHealAction re-observing when the cached/derived selector fails; act(Action) skips inference entirely. services/extractService.ts sends outline (+ optional viewport screenshot) with a Zod schema and validates the response; extract cache keys exclude screenshot pixels. services/cacheService.ts: withCache ships the raw CDP a11y tree(s) + instruction/options to the Browserbase API which hashes DOM shape and URL, stores in Redis, and returns Action[] on a hit; replayCachedActions executes them with no LLM and any failure falls through to the inference pipeline (which is the self-heal path). llm/ wraps Vercel AI SDK providers; PageCDPEvent notifications forward Runtime.consoleAPICalled. packages/sdk-ts is a thin JSON-RPC client; packages/evals holds a task/dataset eval harness; packages/integrations ships adapters for Claude Code, Codex, Mastra, Vercel AI, CrewAI. Docs v4/migrations/v3.mdx explains agent() removal: 'code mode' (a coding assistant writes a Stagehand script once) or 'tool calling' (expose page.goto/snapshot/locator.click/... as narrow tools; page.snapshot() anchors the loop).",
+  "core_innovation": "observe() turns a natural-language intent into a concrete, replayable Action (selector + method + args) so the LLM run happens once and subsequent runs are deterministic locator calls, with a DOM-shape-keyed cache and self-heal fallback around that boundary.",
+  "strengths": [
+    "Exactly the 'LLM explores, deterministic asserts' split: observe() yields Actions with real xpath selectors that can be committed to a repo and replayed with act(Action) without any model call.",
+    "Zod-first everywhere: protocol schemas, extract() output schema, LLM response schemas; TypeScript native, so it slots into our TS/Zod stack with no bridge.",
+    "Accessibility-tree page model with structural pruning, iframe injection and diff-of-new-lines is compact and model-agnostic (no vision required); page.snapshot() returns formattedTree + xpathMap which is directly reusable as a serialization format.",
+    "Cache is keyed on DOM shape + instruction + options and deliberately excludes model config, so switching models does not invalidate; replay failure automatically re-enters inference (self-heal) rather than hard-failing.",
+    "v4 philosophy statement ('use page.locator() wherever a selector is stable, spend a model call only where the page needs judgement') matches the constraint-not-generation principle.",
+    "MIT; three SDKs generated from one schema; active daily commits; evals package shows they measure act/extract accuracy on datasets."
+  ],
+  "weaknesses": [
+    "v4 caching is server-side only and requires a Browserbase session + API key; with a local browser `cache` is a no-op, so 'deterministic replay after first LLM run' has to be built ourselves by persisting observe() Actions (the primitives exist, the local cache does not).",
+    "The runtime is a Chrome-extension service worker driven via JSON-RPC and its own CDP Page/Locator reimplementation, not Playwright; it produces no trace.zip, no reporter JSON, no toHaveScreenshot; it cannot be a fixture inside @playwright/test and Firefox/WebKit are out.",
+    "agent() (including CUA mode) was removed in v4; 'act like a user and report friction' must be a tool-calling loop we own.",
+    "Selectors are absolute xpaths from domTree.ts; on regenerated markup they are brittle by construction, so replay on a new build will self-heal (= LLM call) frequently unless we key Actions on data-slot/aria attributes instead.",
+    "Heavy monorepo (190 MB, MDX docs, Go/Python SDKs); v2->v3->v4 API churn within 18 months; the v4 docs still carry migration TODOs.",
+    "Vendor gravity: the best features (cache, hosted browsers, session persistence) route through Browserbase's paid API."
+  ],
+  "patterns_to_steal": [
+    "observe() -> Action[] then act(Action) → qa_gate (friction scripts): author user-journey scripts in natural language once, resolve them to Action[] at library authoring time against the reference render of each arrangement, commit the Actions (rewritten to data-slot/aria selectors), and replay them deterministically in the gate; only on failure re-run observe as a warning-only diagnostic.",
+    "Cache key = hash(DOM shape) + instruction + options, model excluded → agent_orchestration: every model selection step (creative direction, arrangement pick) is memoized on the hash of its eligible-set snapshot + positioning + playbook version so re-runs are byte-identical and model upgrades do not silently change priors.",
+    "page.snapshot() {formattedTree, xpathMap} with structural pruning and diffCombinedTrees → agent_orchestration (explorer pass): if an LLM explorer runs on the generated site, feed it the pruned a11y outline and only the new lines after each action, not screenshots.",
+    "Protocol package pattern (Zod schemas -> JSON schema -> generated clients) → SiteDefinition contract: keep the Zod SiteDefinition as the single source of truth and generate the JSON Schema consumed by the renderer/editor/validators from it, as stagehand.v4.json is generated from schemas.ts.",
+    "Self-heal as fallback, not default (selfHeal flag, replay throws to re-enter inference) → qa_gate: deterministic replay first; inference only on explicit failure and always recorded as a distinct outcome in the report."
+  ],
+  "patterns_to_avoid": [
+    "Absolute-xpath Actions as durable selectors → on generated sites the DOM shape changes per arrangement; use stable data-slot / role+name selectors so replay is deterministic across builds.",
+    "Depending on Browserbase server-side cache for determinism → vendor lock and network dependency in the gate; persist Actions locally in the section library instead.",
+    "Replacing Playwright with the understudy runtime → loses toHaveScreenshot, ARIA snapshots, reporters, tracing, multi-browser; Stagehand is a companion for exploration, not the gate runtime.",
+    "extract() with screenshots for facts → screenshot-assisted extraction is non-deterministic and cannot cite a source string; FactRegistry entries must come from DOM text with a URL and fetched_at."
+  ],
+  "reusable_patterns": [
+    "ObserveThenReplay: natural-language intent is resolved once into concrete selector+method+args records that are executed without a model thereafter.",
+    "DomShapeKeyedMemo: memoize model outputs on a hash of the structural input (a11y tree / eligible set) plus instruction, excluding model identity.",
+    "SelfHealFallback: deterministic replay is the primary path; inference is entered only when replay throws, and the outcome is labelled.",
+    "PrunedA11yOutline: model-facing page state is the CDP accessibility tree with structural roles unwrapped, ids encoded as frameOrdinal-backendNodeId, and iframes injected inline.",
+    "SchemaFirstProtocol: one Zod schema catalog generates the wire JSON schema and all client types."
+  ],
+  "adoption_strategy": "Adapt. Do not embed the Stagehand runtime in the gate (it is not Playwright and its cache is hosted). Take the observe()->Action->act(Action) contract and the DOM-shape-keyed memo pattern and implement them in our Playwright/TS stack: an authoring-time script `resolveJourney(intent, referenceRenderUrl)` that uses an LLM once (via Playwright MCP-style a11y snapshot or Stagehand's TS SDK against a local browser) to produce Action[] pinned to data-slot/aria selectors, stored beside the arrangement in the section library; the gate replays those Actions with plain Playwright locators as named test.steps. Optionally use the Stagehand TS SDK with localBrowser.launch() for the warning-only 'user friction' explorer pass via tool calling, since it is MIT and pure TS.",
+  "recommendation": "Adapt",
+  "novelty_score": 7,
+  "difficulty_score": 4,
+  "pipeline_stages_affected": ["qa_gate", "agent_orchestration", "research"],
+  "evidence": [
+    "packages/protocol/README.md and schemas.ts (ActionSchema selector/description/method/arguments; act instruction z.union([string, ActionSchema]); snapshot result formattedTree + xpathMap; PageCDPEventSchema Runtime.consoleAPICalled), schema-registry.ts, stagehand.v4.json generation flow",
+    "packages/extension/understudy/a11y/snapshot/a11yTree.ts (Accessibility.getFullAXTree, decorateRoles, buildHierarchicalTree, isStructural, pruneStructuralSafe), treeFormatUtils.ts (formatTreeLine `[id] role: name`, injectSubtrees, diffCombinedTrees, cleanText), domTree.ts (xpathMap/tagNameMap/scrollableMap), capture.ts (encode ordinal-backendNodeId)",
+    "packages/extension/services/actService.ts (act(): waitForDomNetworkQuiet -> cacheService.withCache -> runActPipeline; replayCachedActions 'no LLM involved', takeDeterministicAction -> performUnderstudyMethod; selfHealAction; normalizeActInferenceElement -> `xpath=` selectors)",
+    "packages/extension/services/cacheService.ts (withCache; server-side key from raw CDP tree + instruction/options; model config excluded; normalizeCachedActions; hit/miss metadata; buildCacheContext requires apiKey + Browserbase sessionId)",
+    "packages/extension/services/extractService.ts (a11y outline + optional viewport screenshot; cache keys exclude screenshot pixels), observeService.ts",
+    "packages/extension/llm/schemas.ts (Zod ChatCompletionOptions, response_model), llm/aisdk.ts",
+    "packages/docs/v4/best-practices/caching.mdx (server-side cache, local browser => no cache), v4/migrations/v3.mdx (agent() removal rationale, code mode vs tool calling, page.snapshot anchors the loop, CUA 'no equivalent')",
+    "packages/extension/README.md (service-worker runtime), packages/evals/, packages/integrations/",
+    "package.json (stagehand-workspace 4.0.0, MIT, pnpm/turbo), raw/browserbase_stagehand/meta.json, languages.json (TS 5.7 MB, MDX 1.7 MB, Python, Go)"
+  ]
+}

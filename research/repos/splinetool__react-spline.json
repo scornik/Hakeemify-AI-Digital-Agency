@@ -1,0 +1,60 @@
+{
+  "repo": "splinetool/react-spline",
+  "url": "https://github.com/splinetool/react-spline",
+  "category": "3d-webgl",
+  "license": "MIT (wrapper only); @splinetool/runtime and the Spline editor are closed-source SaaS",
+  "stars": 1421,
+  "last_push": "2026-03-13",
+  "status_note": "active but thin (3 source files); runtime published from a private repo (splinetool/spline) as @splinetool/runtime 2.0.55",
+  "core_problem": "Drop a scene authored in the Spline SaaS editor into a React page: <Spline scene='https://prod.spline.design/<id>/scene.splinecode' />.",
+  "architecture": "src/Spline.tsx: a forwardRef component that in useEffect constructs `new Application(canvas, {renderOnDemand, wasmPath})` from @splinetool/runtime, awaits `app.load(sceneUrl)`, wires nine Spline event names (mouseDown, mouseHover, scroll, lookAt, follow, ...) to props, renders `children` only while isLoading (poster slot) and disposes on unmount; src/ParentSize.tsx debounces resize (50 ms). src/next/SplineNext.tsx is a Next.js server component that regex-matches the scene URL, fetches https://<prod|draft>.spline.design/<id>/hash to get a thumbhash + dimensions, decodes it to a data-URI image (decodePreview.ts, thumbhash/blurhash deps) and passes it as the loading placeholder. The runtime itself (not in this repo) is 944 kB min / 263 kB gzip main entry, 368 files / 35.7 MB unpacked including WASM for physics loaded from a `wasmPath` (CDN by default), deps on-change + semver-compare, sideEffects:true. Scenes are hosted on prod.spline.design unless the .splinecode is downloaded and self-hosted (README notes CORS issues). AI wiring: none in the wrapper; Spline's editor has AI generation features server-side.",
+  "core_innovation": "Server-side thumbhash placeholder fetched from the scene's /hash endpoint so the poster appears at SSR time before the runtime loads.",
+  "strengths": [
+    "renderOnDemand defaults to true (idle when nothing changes).",
+    "`children` as a loading slot and SplineNext's thumbhash placeholder are a correct poster-first pattern, generated at build/SSR time.",
+    "Tiny, readable wrapper; dispose() on unmount; ErrorBoundary-friendly (throws the load error).",
+    "Designers can author in a GUI and export a URL: zero engineering per scene."
+  ],
+  "weaknesses": [
+    "Runtime cost: 263.5 kB gzip / 944 kB min for @splinetool/runtime before the scene file (.splinecode is typically hundreds of kB to several MB) and physics WASM: 1.9x the 140 kB section ceiling and 1.5x the whole 180 kB page budget.",
+    "Closed source runtime and editor; scene files are a proprietary format; hosting defaults to spline.design (third-party availability, ToS and plan limits govern whether the URL keeps working; self-hosting requires manual download per export).",
+    "Peer on react + react-dom: another React island in Astro.",
+    "Slop signature: yes. Glossy pastel blobs, iridescent glass shapes, floating abstract orbs with mouse-follow are the recognisable Spline look and are saturated across AI-generated SaaS and agency templates; a local-service client's site with one reads as a template.",
+    "No prefers-reduced-motion handling; interactions (lookAt/follow) are pointer-driven by default.",
+    "Placeholder is a blurhash, not the real frame: a blurred blob next to sharp typography looks unfinished if the runtime is slow on mobile.",
+    "Low bus factor for the wrapper (3 files, last push Mar 2026) and full dependence on a VC-funded SaaS's roadmap."
+  ],
+  "patterns_to_steal": [
+    "Build-time placeholder derived from the asset itself (SplineNext /hash -> thumbhash -> data URI) -> asset pipeline: every WebGL/video section carries a poster generated at library time (a real rendered frame, not a blurhash) and stored with the asset_constraints.",
+    "`children` rendered only while loading, canvas display:none until loaded -> lazy-mount pattern: poster stays in the DOM until first frame; canvas is hidden, not absent, so layout is stable (no CLS).",
+    "renderOnDemand default true -> motion budget default: on-demand rendering is the only allowed mode."
+  ],
+  "patterns_to_avoid": [
+    "Spline scenes in any section -> runtime 263 kB gzip + hosted proprietary file; violates budget, self-hosting rule, and reads as an AI template.",
+    "Third-party scene hosting on prod.spline.design -> production dependency on a SaaS CDN and its ToS.",
+    "Mouse-follow / lookAt interactions -> the 'eyes follow cursor' hero is a slop tell and pointer-costly."
+  ],
+  "reusable_patterns": [
+    "AssetDerivedPlaceholder: compute a tiny placeholder (hash or real poster) from the asset at build time and inline it in SSR output.",
+    "HiddenUntilFirstFrame: keep the heavy canvas mounted but display:none while a poster occupies the same box.",
+    "OnDemandByDefault: renderOnDemand=true as the library default, opt-in to continuous."
+  ],
+  "adoption_strategy": "Ignore — the wrapper is fine but the product it wraps fails every constraint: 263 kB gzip closed-source runtime, proprietary hosted scene files, React peer, and a visual idiom that the anti-slop gate should explicitly ban (tier-1 layout ban on 'floating glossy 3D shapes'). Take only the SSR-placeholder and hidden-until-first-frame ideas for our own poster-first WebGL/video sections.",
+  "recommendation": "Ignore",
+  "novelty_score": 2,
+  "difficulty_score": 2,
+  "pipeline_stages_affected": [
+    "motion",
+    "anti_slop",
+    "art_direction",
+    "renderer"
+  ],
+  "evidence": [
+    "src/Spline.tsx (new Application(canvas,{renderOnDemand,wasmPath}); app.load(scene); nine event names; children rendered while isLoading; canvas display:none until loaded; dispose on unmount)",
+    "src/next/SplineNext.tsx (regex on https://<scope>.spline.design/<id>/scene.splinecode; fetch of /hash; decodePreview -> next/image placeholder)",
+    "package.json (v4.1.0; deps blurhash, thumbhash, lodash.debounce, react-merge-refs; peer @splinetool/runtime, react, react-dom, next>=14.2)",
+    "README.md (export from Spline editor -> prod.spline.design URL; CORS note recommending download and self-host of .splinecode)",
+    "npm view @splinetool/runtime: 2.0.55, deps on-change + semver-compare, dist.unpackedSize 35,676,889 bytes, 368 files, repository splinetool/spline (private)",
+    "bundlephobia @splinetool/runtime 2.0.55 = 944.1 kB min / 263.5 kB gzip, sideEffects true"
+  ]
+}

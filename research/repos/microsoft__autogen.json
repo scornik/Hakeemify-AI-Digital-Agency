@@ -1,0 +1,61 @@
+{
+  "repo": "microsoft/autogen",
+  "url": "https://github.com/microsoft/autogen",
+  "category": "agents",
+  "license": "CC-BY-4.0 (root LICENSE, applies to docs/content); code is MIT via LICENSE-CODE (verified: root LICENSE = 'Attribution 4.0 International', LICENSE-CODE = MIT, Microsoft Corporation)",
+  "stars": 61118,
+  "last_push": "2026-04-15",
+  "status_note": "maintenance mode. README carries a 'Maintenance Mode' badge and states AutoGen will not receive new features, is community managed, and new users should use Microsoft Agent Framework (the AutoGen + Semantic Kernel successor, 1.0 released). Last substantive commit 2026-04-06 ('Update maintenance mode banner'). Not archived, but effectively end-of-life.",
+  "core_problem": "Provide an actor-model runtime (autogen-core: typed message passing, topics/subscriptions, distributed or single-threaded) and, on top of it, an opinionated multi-agent chat layer (autogen-agentchat: teams with turn-taking strategies and composable termination conditions) for LLM agents that talk to each other.",
+  "architecture": "python/packages/autogen-core/src/autogen_core: `AgentRuntime` Protocol (_agent_runtime.py) with send_message (RPC to an AgentId), publish_message (to a TopicId), register_factory/register_agent_instance; agents are `RoutedAgent` subclasses with @message_handler dispatch by message type; subscriptions map topic types to agent types (TypeSubscription, TypePrefixSubscription); `SingleThreadedAgentRuntime` processes an async queue, a gRPC runtime exists in autogen-ext for distributed use; `InterventionHandler` (_intervention.py) exposes on_send/on_publish/on_response and can return DropMessage, i.e. a runtime-level middleware for confirmation or filtering; `CancellationToken`; `Component` config system (_component_config.py: dump_component/load_component to a versioned ComponentModel with provider path, so a whole team is serializable to JSON and re-loadable). code_executor/ interface with local, docker, docker_jupyter, jupyter and azure executors in autogen-ext. autogen-agentchat: BaseChatAgent/AssistantAgent (tool calling, model_context, memory), UserProxyAgent (input_func for human input), teams in teams/_group_chat: RoundRobinGroupChat, SelectorGroupChat (LLM or custom selector_func picks next speaker), Swarm (handoff messages route control), MagenticOneGroupChat (orchestrator with ledger), and GraphFlow (_graph/_digraph_group_chat.py: DiGraph of DiGraphNode with activation 'all'|'any' and DiGraphEdge with condition; DiGraphBuilder add_node/add_edge/add_conditional_edges/set_entry_point/build; cycles allowed with exit conditions). Termination (conditions/_terminations.py): TerminationCondition is composable with & and | (AndTerminationCondition/OrTerminationCondition); implementations MaxMessage, TextMention, TokenUsage, Timeout, StopMessage, Handoff, External, SourceMatch, TextMessage, FunctionCall, Functional. Teams expose save_state/load_state (Mapping) and pause/resume/reset; state is a dict, not an event log. Also in repo: autogen-studio (web UI), agbench, magentic-one; a .NET implementation under dotnet/. Python and .NET; no TypeScript.",
+  "core_innovation": "Separating a language-agnostic actor runtime (typed messages, topics, interventions) from the chat-team layer, and making run termination a composable boolean algebra of conditions (max messages & token usage | text mention).",
+  "strengths": [
+    "Composable termination conditions (&, |) over messages, tokens, wall-clock, external signals are a clean, declarative way to express 'stop when'.",
+    "InterventionHandler is a runtime-level middleware: every send/publish/response can be inspected, rewritten or dropped without touching agents.",
+    "Component serialization (dump_component/load_component with provider + version) makes whole team configurations versioned data.",
+    "GraphFlow shows that even a chat-framework converged on explicit DAGs with activation all/any and conditional edges.",
+    "Docker/Jupyter code executors with a small CodeExecutor interface."
+  ],
+  "weaknesses": [
+    "Maintenance mode, community-managed, no new features; Microsoft directs new work to Microsoft Agent Framework. Building on it means adopting an orphaned API.",
+    "Python (and .NET) only; no TypeScript.",
+    "Chat-centric: the unit of work is a message in a group conversation, and turn-taking (Selector, Swarm) is decided by an LLM; that is model-narrated orchestration, rejected for us.",
+    "State is a dict snapshot per team (save_state/load_state), not an event log; no checkpoint-per-step, no time travel, no cost budget except TokenUsageTermination.",
+    "No structured-output validation/retry at the framework level; no stuck detection beyond termination conditions.",
+    "Root license CC-BY-4.0 causes tooling confusion (GitHub reports the repo as CC-BY-4.0) even though code is MIT; docs content is CC-BY-4.0, so copying doc text needs attribution."
+  ],
+  "patterns_to_steal": [
+    "Composable termination algebra (MaxMessage & TokenUsage | ExternalTermination) -> agent_orchestration: express run limits as a small set of predicate objects combined with and/or (max_model_calls AND max_cost OR owner_cancel), evaluated by code after every stage.",
+    "InterventionHandler on_send/on_publish returning DropMessage -> qa_gate / anti_slop: a middleware layer between the model-call wrapper and the assembler that can drop or rewrite any model output that fails tier-1 regex bans before it reaches the state.",
+    "ComponentModel (provider, version, config) serialization -> design_system / playbooks: version every configurable object (design system, playbook, archetype) with an explicit schema version and a loader that can migrate past versions (_from_config_past_version).",
+    "GraphFlow activation 'all' vs 'any' on nodes -> agent_orchestration: assembly waits for ALL section selections; gap report can fire on ANY gate failure."
+  ],
+  "patterns_to_avoid": [
+    "SelectorGroupChat/Swarm/MagenticOne (LLM picks next speaker, ledger-driven orchestrator) -> model-driven control flow contradicts 'code decides, model selects'.",
+    "Adopting autogen-core actor runtime -> a Python message bus for a linear TypeScript pipeline; also end-of-life.",
+    "Team-level dict save_state as the persistence model -> we want an append-only event log plus per-stage checkpoints for traceability."
+  ],
+  "reusable_patterns": [
+    "TerminationAlgebra: stop conditions are objects composed with and/or and evaluated over the run history.",
+    "RuntimeIntervention: a middleware hook on every message send/publish that can rewrite or drop it.",
+    "VersionedComponentConfig: every pluggable object serializes to {provider, version, config} and can be reloaded and migrated.",
+    "ActivationPolicyNode: a DAG node declares whether it fires when all or any of its predecessors complete."
+  ],
+  "adoption_strategy": "Ignore. It is in maintenance mode, Python/.NET only, chat-centric with LLM-selected turn-taking, and offers no durable checkpointing or output validation. Its only transferable ideas (composable termination predicates, a message intervention hook, versioned component configs) are each a few dozen lines in TypeScript and are documented here so the architect can implement them without the dependency. If Microsoft's direction matters to the team, evaluate Microsoft Agent Framework separately, but it is also Python/.NET and not a fit for an Astro/TS pipeline.",
+  "recommendation": "Ignore",
+  "novelty_score": 4,
+  "difficulty_score": 7,
+  "pipeline_stages_affected": [
+    "agent_orchestration",
+    "anti_slop",
+    "design_system"
+  ],
+  "evidence": [
+    "LICENSE (Attribution 4.0 International) and LICENSE-CODE (MIT, Microsoft Corporation)",
+    "README.md lines 14-25, 177, 200 (Maintenance Mode badge, 'will not receive new features', migrate to Microsoft Agent Framework); git log -1 = 2026-04-06 'Update maintenance mode banner in readme (#7521)'",
+    "python/packages/autogen-core/src/autogen_core/_agent_runtime.py (AgentRuntime Protocol send_message/publish_message/register_factory), _intervention.py (InterventionHandler on_send/on_publish/on_response, DropMessage), _component_config.py (ComponentModel, dump_component/load_component, _from_config_past_version), code_executor/",
+    "python/packages/autogen-agentchat/src/autogen_agentchat/base/_termination.py (__and__/__or__, AndTerminationCondition/OrTerminationCondition), conditions/_terminations.py (MaxMessage/TextMention/TokenUsage/Timeout/External/Handoff/FunctionCall...)",
+    "python/packages/autogen-agentchat/src/autogen_agentchat/teams/_group_chat/{_round_robin_group_chat,_selector_group_chat,_swarm_group_chat}.py, _graph/_digraph_group_chat.py + _graph_builder.py (DiGraphNode activation all|any, add_conditional_edges), _base_group_chat.py (save_state/load_state/pause/resume/reset)",
+    "python/packages/autogen-agentchat/src/autogen_agentchat/agents/_user_proxy_agent.py (input_func); python/packages/autogen-ext/src/autogen_ext/code_executors/{local,docker,docker_jupyter,jupyter,azure}"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "name": "pennysite",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel -r run dev",
+    "build": "pnpm -r run build",
+    "lint": "pnpm -r run lint",
+    "lint:fix": "pnpm -r run lint:fix",
+    "test": "pnpm -r run test",
+    "server:dev": "pnpm --filter pennysite-server dev",
+    "frontend:dev": "pnpm --filter pennysite-frontend dev",
+    "db:migrate": "supabase db push",
+    "db:migrate:new": "supabase migration new",
+    "db:diff": "supabase db diff",
+    "db:reset": "supabase db reset"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.2.0"
+  },
+  "packageManager": "pnpm@11.17.0+sha512.cca3cea332ad254bb84145f966d19f4879615210346fc92c79a047f23a0d7b3cca3c3792f0076ba1f1831d277efbcf0a9119b31a9a60eca7fb3d6231f331ef72"
+}

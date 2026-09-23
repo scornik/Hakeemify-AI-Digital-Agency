@@ -1,0 +1,79 @@
+{
+  "repo": "payloadcms/payload",
+  "url": "https://github.com/payloadcms/payload",
+  "category": "cms",
+  "license": "MIT",
+  "stars": 44899,
+  "last_push": "2026-09-23",
+  "status_note": "active; main branch is 4.0.0-canary.36 (3.x stable). Next.js-native admin, new @payloadcms/tanstack-start adapter in 4.0 canary; Local API runs framework-free (getPayload).",
+  "core_problem": "A config-as-code TypeScript backend/CMS: you declare collections/globals/fields in buildConfig() and get a DB schema (Drizzle Postgres/SQLite or Mongo), REST/GraphQL/Local API, generated TS types + JSON schema, versions/drafts, access control, hooks and a React admin panel for free.",
+  "architecture": "Root Config (packages/payload/src/config/types.ts: collections, globals, blocks, db adapter, editor, plugins[], jobs, kv, typescript, admin.livePreview) is sanitized into SanitizedConfig with flattenedFields per collection. Fields (packages/payload/src/fields/config/types.ts) are a discriminated union on `type` (text, number, select, relationship, upload, array, group, tabs, row, collapsible, json, richText, blocks, join, point...). Every data field carries FieldBase: access{create,read,update}, validate(value, opts), hooks{beforeValidate,beforeChange,afterChange,afterRead,beforeDuplicate}, jsonSchema[] transformers, localized, index/unique, admin.condition. `blocks` fields hold Block[] (slug, fields, interfaceName, admin.images/group, jsx import/export for Lexical/Markdown) or slugs referencing config.blocks; each stored row carries blockType (=slug) + blockName; filterOptions({siblingData,data,req}) restricts which block slugs are allowed per context and is re-validated on save (fields/validations.ts `blocks`). Hook pipeline per operation: beforeOperation -> beforeValidate (field hooks + type coercion in fields/hooks/beforeValidate/promise.ts) -> validate -> beforeChange -> DB -> afterChange -> afterRead; field hooks receive path/schemaPath/blockData/siblingData/previousValue/operation. Versions (packages/payload/src/versions/*): a shadow `_slug_versions` collection stores {parent, version:<full doc>, autosave, _status, createdAt}; drafts inject `_status: draft|published`, `draft:true` writes only to the versions table, maxPerDoc/enforceMaxVersions, schedulePublish jobs, autosave debounced ~800ms updates the latest autosave version in place. Access control = per-collection/per-field functions returning boolean or a Where query. Live preview (packages/live-preview/src): admin iframes the frontend and posts `{type:'payload-live-preview', collectionSlug|globalSlug, data, locale}`; the frontend's subscribe()/handleMessage() calls mergeData() which POSTs the unsaved form data to `/api/<collection>/<id>` with header `X-Payload-HTTP-Method-Override: GET` to get relationships populated, caches previousData, and re-renders; server-side variant uses isDocumentEvent() -> router.refresh(). Plugins are `(config) => config` functions (definePlugin with slug/order/options) that push collections/fields: plugin-seo injects a `meta` group (title/description/image/preview with generate fns), plugin-redirects a `redirects` collection (from, to{type,reference|url}), plugin-form-builder `forms`+`form-submissions` with a blocks field of form-field blocks, plugin-multi-tenant adds a `tenant` relationship to listed collections, baseListFilter by selected tenant, filterOptions on relationships, and a collection hook rejecting writes to tenants the user is not assigned (userHasAccessToAllTenants override). Types: `payload generate:types` emits payload-types.ts from JSON schema (json-schema-to-typescript) with a per-block top-level interface; `declare module 'payload' { interface GeneratedTypes }` gives a typed Local API (payload.find({collection:'pages'})). The official examples/astro shows getPayload({config}) + payload.find() called directly in an .astro frontmatter with the Payload config imported from a sibling workspace package; the admin UI still requires a Next.js (or TanStack Start, 4.0 canary) host.",
+  "core_innovation": "A single TypeScript config is simultaneously the DB schema, the API, the generated types/JSON schema, the validation/hook pipeline and the admin UI, with typed block unions (blockType) and full-document versioning as first-class primitives.",
+  "strengths": [
+    "blocks field = typed discriminated union (blockType) with per-block generated TS interface and JSON schema; block definitions can be centralized in config.blocks and referenced by slug everywhere (including inside Lexical richText).",
+    "BlocksField.filterOptions({siblingData,data,req}) => allowed slugs, re-validated on save: a schema-level 'which sections are eligible here' gate that mirrors our compat filter.",
+    "Field hooks/validate receive blockData, siblingData, path, schemaPath, previousValue and operation, so an invariant can be expressed exactly at the field where it lives and return a string error that becomes a ValidationError.",
+    "Versions model is simple and correct: full-document snapshots in `_slug_versions` with parent/autosave/_status, drafts written only to the versions table, published doc immutable until explicit `_status: published`, maxPerDoc retention, scheduled publish via the jobs queue.",
+    "Live preview protocol is framework-agnostic (window.postMessage + ready/subscribe/unsubscribe + mergeData populate round-trip); Astro would only need a tiny client island to implement it.",
+    "Local API works outside Next (getPayload({config}) in scripts/Astro frontmatter); MIT; Postgres via Drizzle; plugin-multi-tenant is a complete, small reference implementation of tenant isolation (field + list filter + write-enforcement hook).",
+    "Generated types + `jsonSchema` transformers let you emit a JSON schema for LLM tool calling directly from the content model (used by plugin-mcp)."
+  ],
+  "weaknesses": [
+    "Next-native by design: the admin panel, custom field components (PayloadComponent paths), server functions and RSC utilities live in @payloadcms/next / @payloadcms/ui; the TanStack Start adapter is 4.0 canary. With Astro you host a second app (Next) just for the admin/editor, or consume Payload as a headless backend from Astro over Local API/REST.",
+    "Relational storage of blocks/arrays: on Postgres each block type and array becomes its own table with _order/_path/_locale columns (packages/drizzle). A deep SiteDefinition (sections[] -> arrangement -> slots[] -> fact refs) becomes dozens of tables and a migration each time the section library changes; the `json` field escapes this but then you lose the admin UI value.",
+    "Hooks run at the CMS write boundary inside Payload's request lifecycle; our invariants (fact provenance, rights != unknown, quotable-only) must run in the deterministic pipeline before assembly anyway, so Payload hooks would be a second, duplicated enforcement point.",
+    "4.0 canary on main means API churn (definePlugin, blocks references, versions defaults changed recently); 1164 open issues; large dependency surface (React 19, Next, Lexical) for what is, in V1, a store with no human editor.",
+    "Per-document versioning is document-scoped: no cross-collection 'site snapshot' (site + design system + facts at one point in time) and no pinning of external artifact versions; that has to be modelled by hand either way.",
+    "Live preview merges unsaved form data via a server round-trip per keystroke (mergeData POST) and requires depth to match the initial fetch; it is optimized for Payload's relationship population, not for re-running a deterministic assembly pipeline."
+  ],
+  "patterns_to_steal": [
+    "blockType-discriminated block rows + per-block interfaceName -> SiteDefinition.sections[] as a Zod discriminatedUnion('family') with generated JSON schema handed to the model as the only vocabulary it may select from (Creative Direction / Beat selection).",
+    "BlocksField.filterOptions re-evaluated on every data change and re-validated on save -> Compat filter: eligible section families/arrangements computed from the predicate snapshot, and a save-time re-check that rejects any section not in the eligible set (Eligibility + Assembly).",
+    "Field hook pipeline order (beforeValidate coercion -> validate -> beforeChange -> afterChange) with FieldHookArgs{path, schemaPath, blockData, siblingData, previousValue, operation} -> a tiny in-house `applyInvariants(siteDef, ctx)` runner where each invariant is registered against a schemaPath (e.g. sections[].slots[].fact_id must resolve to a FactRegistry entry with quotable=true and rights!=unknown) and returns path-addressed errors (FactRegistry + QA gate).",
+    "`_slug_versions` snapshot table {parent, version(full doc), autosave, _status, createdAt} + `draft:true` writes-only-to-versions + explicit publish -> site_versions table storing the whole SiteDefinition JSON per save with status draft|published, published row immutable; pin design_system@version and playbook@version inside the snapshot so old sites never auto-migrate (versions + pinning).",
+    "Live preview postMessage protocol (ready -> subscribe -> {type, data} events -> mergeData -> re-render; isDocumentEvent -> refresh for SSR) -> post-V1 editor: the editor posts a draft SiteDefinition into an Astro-rendered iframe; an Astro SSR endpoint renders from the posted JSON so the renderer stays the single source of truth (visual_editor).",
+    "plugin-multi-tenant mechanics (tenant relationship on every collection, baseListFilter by selected tenant, relationship filterOptions scoped to tenant, collection hook rejecting writes to non-member tenants, cleanupAfterTenantDelete) -> site_id column on every table + Drizzle query helpers + one write guard (multi-tenancy for the agency store).",
+    "plugin-seo `meta` group with generateTitle/generateDescription/generateURL callbacks and plugin-redirects from/to{reference|url} schema -> SEO slot and redirects table in SiteDefinition; keep generation deterministic (derived from facts), not model-written (renderer/cms).",
+    "`jsonSchema` field transformers + generate:types -> single Zod source producing both TS types and the JSON schema for the model's constrained tool call (agent_orchestration)."
+  ],
+  "patterns_to_avoid": [
+    "Running Payload as the primary store in V1 -> requires a Next host for an admin we cut from V1, relational block tables that churn with the section library, and 4.0 canary churn; store SiteDefinition as validated JSONB instead.",
+    "Modelling sections as Payload blocks with free-form text/richText fields editable by humans -> our slots must bind to FactRegistry ids, not free text; free text is where unquotable claims leak in.",
+    "Lexical richText as the content model for section copy -> heavy JS/editor surface and unconstrained markup; use fact-bound slots with limited inline marks.",
+    "Client-side live preview with mergeData populate round-trips per keystroke -> our preview should re-run assembly + the anti-slop gate server-side on a debounced draft, not merge partial form state.",
+    "Letting plugin-seo generate* callbacks call an LLM for meta text -> violates 'model only selects'; derive meta from positioning + facts deterministically."
+  ],
+  "reusable_patterns": [
+    "TypedBlockUnion: a list field whose rows are a discriminated union on a `blockType` slug, each variant with its own schema and generated interface.",
+    "ContextualAllowList: a per-field function computing which union variants are permitted from sibling/parent data, re-validated at write time.",
+    "PathAddressedFieldHooks: validators/hooks registered on schema paths receiving (value, siblingData, blockData, path, previousValue, operation) and returning path-scoped errors.",
+    "ShadowVersionTable: full-document snapshots in a parallel table with parent/status/autosave flags; drafts never touch the published row.",
+    "PostMessagePreviewBus: iframe preview protocol of ready/subscribe/document-event messages with the frontend re-rendering from pushed draft data.",
+    "TenantGuardTriplet: tenant field + list filter + write-enforcement hook as the minimal multi-tenancy kit."
+  ],
+  "adoption_strategy": "Adapt — do not adopt Payload as the V1 store; use plain Postgres + Drizzle + Zod with a `sites` table holding the SiteDefinition as JSONB, a `site_versions` shadow table copied from Payload's versions model (full snapshot, parent, status draft|published, autosave flag, pinned design_system@version/playbook@version inside the snapshot), a `facts` table (FactRegistry) with provenance/quotable/rights columns, and a small path-addressed invariant runner modelled on Payload's field-hook pipeline. Keep Payload's conventions (blockType discriminator, per-variant interface names, JSON schema generated from the same Zod source) so that, post-V1, the visual editor can either be built on Payload (its live-preview bus and admin are exactly the cut features) or remain custom without a data migration. Trade-off stated honestly: Payload would give drafts/autosave/versions/access/admin/live-preview for free and its Local API demonstrably works inside Astro frontmatter, but it costs a second Next/TanStack host, relational block tables that churn with every section-library change, duplicated invariant enforcement at the CMS boundary, and 4.0-canary API drift — in V1 (no human editor, the deterministic pipeline writes the doc) those costs buy nothing; revisit at the editor milestone.",
+  "recommendation": "Adapt",
+  "novelty_score": 6,
+  "difficulty_score": 4,
+  "pipeline_stages_affected": [
+    "cms",
+    "fact_registry",
+    "visual_editor",
+    "renderer",
+    "qa_gate",
+    "agent_orchestration"
+  ],
+  "evidence": [
+    "packages/payload/src/fields/config/types.ts (FieldBase.hooks/validate/access/jsonSchema; Block, BlocksField.filterOptions, ArrayField, FieldHookArgs with blockData/path/schemaPath/previousValue)",
+    "packages/payload/src/config/types.ts (Config: blocks[], plugins[], Plugin type with slug/order/options, LivePreviewConfig, typescript, db)",
+    "packages/payload/src/collections/config/types.ts (CollectionConfig.hooks/versions/access/indexes/trash)",
+    "packages/payload/src/versions/types.ts, packages/payload/src/versions/saveVersion.ts, docs/versions/overview.mdx, docs/versions/drafts.mdx, docs/versions/autosave.mdx (_slug_versions shape, draft:true semantics, _status, maxPerDoc)",
+    "packages/payload/src/fields/validations.ts (blocks validation against filterOptions, minRows/maxRows), packages/payload/src/fields/hooks/beforeValidate/promise.ts (type coercion incl. blocks)",
+    "docs/fields/blocks.mdx (Block References via config.blocks, blockType/blockName, Conditional Blocks), docs/hooks/fields.mdx, docs/hooks/collections.mdx",
+    "packages/live-preview/src/handleMessage.ts, mergeData.ts, subscribe.ts, types.ts; docs/live-preview/overview.mdx, client.mdx, server.mdx (postMessage event shape, X-Payload-HTTP-Method-Override populate call, isDocumentEvent/router.refresh)",
+    "docs/local-api/outside-nextjs.mdx and examples/astro/website/src/pages/index.astro (getPayload({config}) + payload.find inside Astro frontmatter; examples/astro/payload is a separate Next app)",
+    "packages/tanstack-start/package.json (@payloadcms/tanstack-start 4.0.0-canary.36), packages/payload/package.json (4.0.0-canary.36)",
+    "packages/plugin-seo/src/index.ts, packages/plugin-redirects/src/index.ts, packages/plugin-multi-tenant/src/index.ts, docs/plugins/multi-tenant.mdx (tenant write enforcement), docs/plugins/build-your-own.mdx (plugin = config => config)",
+    "docs/typescript/generating-types.mdx (jsonSchema transformers, GeneratedTypes declare), docs/database/overview.mdx (Drizzle Postgres/SQLite, Mongo)"
+  ]
+}

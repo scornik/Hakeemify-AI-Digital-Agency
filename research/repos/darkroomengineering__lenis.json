@@ -1,0 +1,67 @@
+{
+  "repo": "darkroomengineering/lenis",
+  "url": "https://github.com/darkroomengineering/lenis",
+  "category": "motion",
+  "license": "MIT",
+  "stars": 15968,
+  "last_push": "2026-09-22",
+  "status_note": "active; v1.3.26; V2-ROADMAP.md published (defaults flip to 'bulletproof by default')",
+  "core_problem": "Smooth (lerped) scrolling that stays on the native scroll position so WebGL/DOM scroll scenes can be synchronised from one loop - smooth scroll itself was, per MANIFESTO.md, a side effect.",
+  "architecture": "Bun workspace; packages/core/src: lenis.ts (1,211 lines, class Lenis), virtual-scroll.ts (wheel/touch listeners registered with {passive:false}; deltaMode line/page multipliers; touch delta tracking), animate.ts (Animate.advance(dt): duration+easing or exponential damp(value, to, lerp*60, dt)), dimensions.ts (ResizeObserver or naive scrollHeight), emitter.ts; packages/react (ReactLenis provider creating the instance in useEffect with its own rAF when autoRaf, useLenis(callback, deps, priority) via a Store fallback), packages/vue (+nuxt module), packages/snap. Runtime: VirtualScroll emits deltas -> onVirtualScroll (lenis.ts 437-600) walks event.composedPath() for data-lenis-prevent*/prevent()/allowNestedScroll, then event.preventDefault()s the wheel/touch event and calls scrollTo(targetScroll+delta,{programmatic:false, lerp|duration/easing}); raf(time) advances Animate and setScroll() writes wrapper.scrollTo({behavior:'instant'}) so the real scroll position (and therefore sticky, anchors, scrollbar, find-in-page) remains native. Keyboard, scrollbar drag and browser-initiated scrolls are NOT intercepted: onNativeScroll (614-646) detects them, syncs animatedScroll=targetScroll=actualScroll and marks isScrolling='native'. Reduced motion: reducedMotionMediaQuery = matchMedia('(prefers-reduced-motion: reduce)') read live at scroll time; in scrollTo(), if prefersReducedMotion then programmatic scrolls become immediate and gesture scrolls get lerp=1 (1:1 tracking) - respectReducedMotion:true by default (lines 39, 755-764, 1177-1180). Anchors: with anchors:true a click handler intercepts <a href='#'> and calls scrollTo honouring scroll-margin/scroll-padding CSS. lenis.css sets overscroll-behavior:contain on prevent regions and pointer-events:none on iframes while smooth. Build: tsdown ESM + IIFE; measured lenis.min.js 18.7 kB/5.4 kB gz, lenis-react.mjs 1.7 kB gz, esbuild tree-shaken 5.6 kB gz.",
+  "core_innovation": "Lerp the wheel/touch input into the native scroll position (not a transformed container), so smooth scroll and WebGL sync coexist with native sticky/anchors/scrollbar/keyboard behaviour.",
+  "strengths": [
+    "Tiny (5.4 kB gz) and dependency-free; framework-agnostic core with thin React/Vue bindings.",
+    "Correct architectural choice versus ScrollSmoother/Locomotive: writes to the real scroll position, so position:sticky, keyboard scrolling, scrollbar dragging, find-in-page and anchors keep working (keyboard/scrollbar are never intercepted - onNativeScroll just re-syncs).",
+    "Reduced motion honoured by default and read live (no listener needed): programmatic scrolls jump, gesture scrolls track 1:1, while the raf loop keeps running so any WebGL sync remains consistent - this is the most careful reduced-motion implementation of the six repos.",
+    "scrollTo respects CSS scroll-margin/scroll-padding on targets; data-lenis-prevent attributes and prevent() give escape hatches for modals/nested scroll.",
+    "V2 roadmap makes safe behaviour default (autoToggle, anchors, allowNestedScroll, stopInertiaOnNavigate) and acknowledges AI/no-code users as the main audience."
+  ],
+  "weaknesses": [
+    "It is still scroll hijacking: wheel and touch events are preventDefault()ed on non-passive listeners (virtual-scroll.ts listenerOptions {passive:false}), which is a Lighthouse best-practice hit, adds per-event main-thread work, breaks iframe scrolling, disables CSS scroll-snap (needs lenis/snap), caps at 60fps on Safari, and can fight OS-level inertia on trackpads.",
+    "The lag between input and viewport is a vestibular/WCAG 2.3.3 concern for users who have not set prefers-reduced-motion; the a11y guarantee depends on the OS flag.",
+    "Requires a permanent rAF loop (autoRaf) even when idle - Animate.advance is cheap but non-zero; with ScrollTrigger integration it also forces gsap.ticker.lagSmoothing(0).",
+    "Smooth scroll is now a recognised 'awwwards-agency / AI-generated portfolio' signature in 2025-26; it signals template motion rather than brand identity and is the opposite of the constraint principle.",
+    "allowNestedScroll walks the DOM on every gesture (README warns of perf cost); syncTouch on iOS <16 is flaky; touch smoothing is off by default so mobile and desktop feel different.",
+    "No tests directory in the repo; behaviour is validated via playground apps."
+  ],
+  "patterns_to_steal": [
+    "Live-read prefersReducedMotion with a tri-mode policy (programmatic->immediate, gesture->1:1, loop keeps running) -> adopt as the semantic definition of reduced_motion_fallback for any scroll-linked effect in the motion profile -> motion / a11y.",
+    "onNativeScroll re-sync (never intercept keyboard/scrollbar; reconcile state from actualScroll) -> any custom scroll-linked runtime we ship must treat native scroll as the source of truth -> renderer / motion.",
+    "scroll-margin/scroll-padding-aware scrollTo -> our anchor navigation (sticky header offsets) should read CSS scroll-margin-top instead of hardcoded offsets, and ideally use native scroll-behavior:smooth -> renderer.",
+    "data-lenis-prevent attribute grammar -> an attribute-level opt-out convention for motion (e.g. data-motion='none') that arrangements can set on scroll regions/modals -> design_system.",
+    "V2 'bulletproof defaults' table -> our motion profile should ship with the conservative branch as default and require explicit opt-in for anything denser -> motion / anti_slop."
+  ],
+  "patterns_to_avoid": [
+    "Smooth/lerped scrolling on the whole page -> wheel/touch preventDefault, main-thread per-event work, iframe/scroll-snap breakage, and a slop signature; put 'smooth_scroll' on the tier-1 anti-slop ban list unless a niche playbook explicitly allows it for a <=1-WebGL-section luxury archetype.",
+    "lenis/snap -> re-implements CSS scroll-snap in JS; use native scroll-snap.",
+    "ReactLenis provider wrapping the whole page -> forces a React root around all content; incompatible with Astro islands.",
+    "GSAP ScrollTrigger + Lenis coupling (lenis.on('scroll', ScrollTrigger.update) + lagSmoothing(0)) -> two scroll models fighting; if we ship GSAP, native scroll is enough."
+  ],
+  "reusable_patterns": [
+    "NativePositionSmoothing: interpolate input into the real scroll position rather than transforming a container, preserving native scroll semantics.",
+    "LiveReducedMotionPolicy: read matchMedia.matches at action time and map (programmatic->instant, gesture->1:1, loop->keep running).",
+    "NativeScrollReconcile: treat un-intercepted native scroll events as truth and re-sync internal targets from them.",
+    "AttributeOptOutGrammar: data-* attributes on subtree roots to exclude regions from a global behaviour.",
+    "SafeDefaultsFlip: version-major that inverts opt-in safety flags to opt-out."
+  ],
+  "adoption_strategy": "Ignore as a shipped dependency; adapt its reduced-motion policy. Smooth scroll fails the architect's a11y stance (non-passive wheel/touch interception, vestibular risk) and is itself a slop signature in 2026, so 'smooth_scroll' goes on the anti-slop ban list. If a luxury archetype ever needs WebGL-DOM sync, Lenis (5 kB, MIT) is the only defensible option and its reduced-motion behaviour should be required verbatim - but that is a post-V1 playbook decision, gated by budget_ms.",
+  "recommendation": "Ignore",
+  "novelty_score": 5,
+  "difficulty_score": 2,
+  "pipeline_stages_affected": [
+    "motion",
+    "anti_slop",
+    "qa_gate",
+    "renderer"
+  ],
+  "evidence": [
+    "raw/darkroomengineering_lenis/meta.json, package.json (exports ., /react, /snap, /vue, /nuxt), README.md (Considerations: nested scroll, anchors, Reduced motion; Limitations)",
+    "scratchpad clone packages/core/src/lenis.ts lines 39-41 (reducedMotionMediaQuery), 437-600 (onVirtualScroll: composedPath prevent walk, preventDefault, scrollTo), 614-646 (onNativeScroll), 706-716 (raf), 739-830 (scrollTo reduced-motion branch, scroll-margin/padding), 1177-1180 (prefersReducedMotion getter)",
+    "packages/core/src/virtual-scroll.ts lines 4-9 (LINE_HEIGHT, passive:false), 35-46 (wheel/touch listeners)",
+    "packages/core/src/animate.ts (Animate.advance damp/easing)",
+    "packages/core/lenis.css; tsdown.config.ts (ESM + IIFE builds)",
+    "packages/react/src/provider.tsx and use-lenis.ts",
+    "MANIFESTO.md (WebGL-DOM sync origin); V2-ROADMAP.md (defaults flip, AI/no-code audience)",
+    "unpkg lenis@1.3.26 dist sizes and esbuild e_lenis measurement (scratchpad/bundle)"
+  ]
+}

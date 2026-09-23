@@ -1,0 +1,69 @@
+{
+  "repo": "chakra-ui/chakra-ui",
+  "url": "https://github.com/chakra-ui/chakra-ui",
+  "category": "design-systems",
+  "license": "MIT",
+  "stars": 40667,
+  "last_push": "2026-09-21",
+  "status_note": "active; v3.37 (packages/react). Note: v3 adopts Panda CSS's config API (tokens/semanticTokens/recipes/conditions) but the runtime is still Emotion (@emotion/react peer dep) — it is NOT zero-runtime; a separate packages/panda-preset exports the same theme for real Panda CSS builds.",
+  "core_problem": "A component system whose styling is fully declarative: tokens, semantic tokens with conditions, and component 'recipes' (variants as data) are all plain objects fed to createSystem(), so a whole theme can be authored, merged and inspected as data.",
+  "architecture": "packages/react/src/styled-system: config.ts exposes identity creators (defineConfig, defineTokens.<category>, defineSemanticTokens.<category>, defineRecipe, defineSlotRecipe, defineConditions, defineTextStyles, defineLayerStyles, defineAnimationStyles, defineKeyframes). system.ts createSystem(...configs) merges configs, builds a TokenDictionary (token-dictionary.ts: tokens {value} and semantic tokens {value:{base|_light|_dark|...}} are flattened to CSS vars `--chakra-<category>-<path>`; semantic conditions become a cssVarMap keyed by condition, emitted under the resolved selector, e.g. `.dark &` for _dark; `colorPalette` virtual tokens remap `colorPalette.solid` -> `--chakra-colors-color-palette-solid` so one recipe serves every hue), createConditions (conditions.ts: user conditions prefixed `_`, breakpoints merged, sorted after plain props), createUtility, createLayers (@layer reset, base, tokens, recipes), createRecipeFn (cva.ts) and createSlotRecipeFn (sva.ts). A recipe is {className, base, variants{name:{option: styles}}, defaultVariants, compoundVariants[{...selection, css}]}; cva.resolve(props) = base + variant styles for each selected key + compound matches, wrapped in @layer recipes; splitVariantProps separates variant props from DOM props. Slot recipes do the same per named slot. Built-in conditions live in preset-base.ts: _hover (`@media (hover: hover)` + :is(:hover,[data-hover]):not(:disabled)), _focusVisible, _disabled, _open, _checked, group/peer variants, _motionReduce (`@media (prefers-reduced-motion: reduce)`), _dark (`.dark &, .dark .chakra-theme:not(.light) &`), _light, _osDark/_osLight (prefers-color-scheme), _highContrast (forced-colors), _rtl, _print, _landscape. Theme data in packages/react/src/theme: tokens/* (colors, spacing, sizes, radii, durations {fastest 50ms..slowest 500ms}, easings, animations, keyframes), semantic-tokens/colors.ts (bg/fg/border/*.{DEFAULT,subtle,muted,emphasized,inverted,error...} each with _light/_dark refs like `{colors.gray.50}`), text-styles.ts (size -> fontSize+lineHeight+letterSpacing compositions), layer-styles.ts (fill.*, outline.*, indicator.* compositions over colorPalette), motion-styles.ts (animationStyles keyed by data-placement), recipes/* (76) and slot-recipes/*. Components consume recipes via useRecipe/useSlotRecipe hooks with Emotion doing the runtime CSS generation.",
+  "core_innovation": "Recipes and slot recipes: component styling as a pure data structure (base + variants + compoundVariants + defaultVariants) resolved by a tiny matcher, combined with condition-keyed semantic tokens and a virtual `colorPalette` token that makes one recipe hue-agnostic.",
+  "strengths": [
+    "Everything is a plain object behind an identity function — recipes, tokens, conditions, compositions — so they are trivially serialisable to/from YAML and mergeable (mergeConfigs, cva.merge).",
+    "Semantic token conditions ({_light, _dark, _osDark, custom}) are resolved at token-dictionary build time into per-condition CSS-var blocks; the recipe never mentions dark mode.",
+    "Virtual `colorPalette` token: `bg: 'colorPalette.solid'` compiles to a var that is re-pointed by setting `colorPalette=\"teal\"` — one variant definition serves every accent hue.",
+    "Compositions (textStyle, layerStyle, animationStyle) are named bundles of properties registered as utilities: a small, reusable vocabulary of 'type set', 'surface treatment', 'entrance motion' as data.",
+    "Conditions are a single map from name to selector/at-rule, including _motionReduce, _highContrast, _print, _rtl — dark mode, reduced motion and forced colours are literally the same mechanism.",
+    "Cascade layers (@layer reset, base, tokens, recipes) give deterministic override order without specificity games."
+  ],
+  "weaknesses": [
+    "Runtime Emotion under the hood (peer @emotion/react; @emotion/serialize in deps); recipes are resolved and serialised at render. To get zero-runtime you must switch to Panda CSS with packages/panda-preset — a different build pipeline.",
+    "Recipe matcher supports variant/compound selection only; there is no `requires`/gating, no composition metadata, no motion budget — it is purely stylistic.",
+    "SaaS/product-UI aesthetics; the 76 recipes are for app components (menu, dialog, table), not marketing sections.",
+    "Token references are stringly typed (`{colors.gray.50}`) and resolved late; typos surface only at build/run of the system, not at authoring time (Chakra generates .gen.ts types via CLI to mitigate).",
+    "Dark mode via `.dark` class selector default couples tokens to a class-toggling script; media-only mode requires overriding conditions."
+  ],
+  "patterns_to_steal": [
+    "Recipe schema {base, variants, defaultVariants, compoundVariants[{selection, css}]} -> renderer/design_system: the exact shape for authoring section-family visual variants as YAML; resolve with a 40-line matcher at build time in Astro and emit static classes.",
+    "Semantic tokens with condition-keyed values ({_light, _dark}) compiled to per-condition CSS-var blocks -> design_system: our YAML tokens carry `value: {base, dark, high_contrast}`; the compiler emits `:root` and `[data-scheme=dark]` blocks; sections never branch on mode.",
+    "Virtual colorPalette token -> design_system + art_direction: sections reference `accent.*` roles; the design system (or a hue_adaptable derivation) re-points the roles, so arrangements are hue-agnostic.",
+    "Conditions map (name -> selector/at-rule) with _motionReduce, _highContrast, _print -> motion + qa_gate: reduced motion and forced-colours are conditions in the same table as dark mode; the anti-slop/QA gate can assert every motion rule has a _motionReduce counterpart.",
+    "Compositions (textStyles, layerStyles, animationStyles) -> design_system visual_dna: named bundles ('display', 'eyebrow', 'surface.raised', 'enter.rise') the model selects by id.",
+    "Cascade layer order (reset, base, tokens, recipes) -> renderer: adopt @layer to keep design-system CSS, section CSS and island CSS from fighting."
+  ],
+  "patterns_to_avoid": [
+    "Runtime recipe resolution through Emotion -> resolve at build time in Astro; ship only static CSS.",
+    "Class-based `.dark &` as the default dark condition with a toggling script -> prefer `prefers-color-scheme` media or a server-set data attribute; no client JS for theme.",
+    "Chakra's component recipes themselves -> product-UI look; author our own section variants.",
+    "Stringly token refs without authoring-time validation -> our YAML must be Zod-validated with token-id enums generated from the token files."
+  ],
+  "reusable_patterns": [
+    "RecipeAsData: {base, variants, defaultVariants, compoundVariants} resolved by a matcher; slot recipes extend it with per-part styles.",
+    "ConditionKeyedToken: a semantic token whose value is a map from condition (_light/_dark/_highContrast) to a primitive-token reference.",
+    "VirtualPaletteToken: role tokens (colorPalette.solid/fg/subtle) re-pointed by a single attribute, making styles hue-agnostic.",
+    "ConditionTable: one map from condition name to selector or at-rule covering colour scheme, reduced motion, forced colours, print, rtl.",
+    "StyleComposition: named bundles of properties (textStyle/layerStyle/animationStyle) registered as single-value utilities.",
+    "LayeredCascade: fixed @layer order reset < base < tokens < recipes."
+  ],
+  "adoption_strategy": "Adapt. Do not install @chakra-ui/react (Emotion runtime, React-only). Copy the data shapes: recipe/slot-recipe schema for section variants, condition-keyed semantic tokens, the virtual colorPalette indirection, compositions as visual_dna vocabulary, and the conditions table including _motionReduce/_highContrast. Implement a build-time resolver (Zod-typed) in the Astro renderer that emits static CSS under @layer.",
+  "recommendation": "Adapt",
+  "novelty_score": 5,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": [
+    "design_system",
+    "renderer",
+    "motion",
+    "qa_gate",
+    "art_direction"
+  ],
+  "evidence": [
+    "packages/react/src/styled-system/config.ts (defineConfig/defineRecipe/defineSlotRecipe/defineTokens/defineSemanticTokens/defineConditions)",
+    "packages/react/src/styled-system/system.ts createSystem (token dictionary, conditions, layers, getTokenCss per condition)",
+    "packages/react/src/styled-system/cva.ts createRecipeFn (variant + compoundVariant matcher, splitVariantProps, merge), sva.ts, recipe.types.ts",
+    "packages/react/src/styled-system/token-dictionary.ts (semantic conditions -> cssVarMap, colorPalette virtual tokens)",
+    "packages/react/src/styled-system/conditions.ts, layers.ts; packages/react/src/preset-base.ts (built-in conditions incl. motionReduce, dark, highContrast, print, rtl)",
+    "packages/react/src/theme/index.ts (defaultThemeConfig), recipes/button.ts, semantic-tokens/colors.ts, tokens/{durations,easings,animations}.ts, text-styles.ts, layer-styles.ts, motion-styles.ts",
+    "packages/react/package.json (deps: @emotion/serialize, @ark-ui/react; peer @emotion/react) — runtime, not zero-runtime"
+  ]
+}

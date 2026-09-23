@@ -1,0 +1,72 @@
+{
+  "repo": "react-page/react-page",
+  "url": "https://github.com/react-page/react-page",
+  "category": "visual-editors",
+  "license": "MIT",
+  "stars": 9538,
+  "last_push": "2026-07-28",
+  "status_note": "maintenance mode: v5.4.6 (2026-07-28) is a dependency/security-hygiene release (ajv 8, yarn 4, drop coveralls; one PR from a 'claude/' branch); previous release v5.4.5 was 2024-11-05 and v5.4.4 2023-04. 7 commits since 2025-01-01, all tooling. 11 open issues. Lerna monorepo: packages/editor (@react-page/editor), packages/plugins/{content,layout}, packages/react-admin.",
+  "core_problem": "A React content editor where a page is a recursive 12-column grid of rows and cells, each cell owned by a versioned 'cell plugin' that renders its own data, with i18n, migrations and a static renderer for read-only output.",
+  "architecture": "packages/editor/src. Document (core/types/node.ts): `Value {id, rows: Row[], version}`; `Row {id, cells: Cell[]}`; `Cell {id, rows?: Row[], plugin?: {id, version}, dataI18n?: {[lang]: Record<string, unknown>}, size?: 1..12 twelfths, inline?: 'left'|'right', isDraft?, isDraftI18n?, hasInlineNeighbour?, isRoot?}`. Cells either carry a plugin (leaf) or nested rows (layout). Plugin data is untyped in the document (`Record<string, unknown>`); typing exists only at the plugin level: `CellPlugin<DataT> = {id, version, migrations: Migration[], Renderer, Provider?, controls: {type:'autoform', schema: JsonSchema<DataT>} | {type:'custom', Component} | SubControlsDef[], createInitialData, serialize/unserialize, childConstraints {maxChildren}, cellPlugins (allowed child plugins, static or fn(data)), isInlineable, allowInlineNeighbours, allowNeighbour(item), cellStyle/cellClassName/cellSpacing (static or fn(data)), getTextContents(data), handle*HotKey}` (core/types/plugins.ts). Autoform controls are rendered by uniforms from a JSON-Schema-like TS type (core/types/jsonSchema.ts) with `showIf`, enum and per-field `uniforms` props; ajv validates. Versioning: `Migration({fromVersion, toVersion, migrate(state, {cellPlugins, lang})})` (core/migrations/Migration.ts); core/migrations/migrate.ts `migrateValue()` upgrades the Value envelope through EDITABLE_MIGRATIONS and, per cell, runs the plugin's migration chain when `cell.plugin.version !== plugin.version`; this runs both on editor load and inside renderer/HTMLRenderer.tsx. State: redux 4 + redux-thunk; core/reducer/values/index.ts wraps the value reducer in redux-undo `undoable(value, {filter: whitelist of action types [UPDATE_VALUE, CELL_UPDATE_DATA, CELL_REMOVE, CELL_RESIZE, CELL_INSERT_*], notUndoable flag on actions, neverSkipReducer, syncFilter})` giving `ValueWithHistory {past, present, future}` full snapshots. Selection/hover: redux `focus`/`hover` slices keyed by cell id; hover position computed by react-dnd drop targets into `Levels {left,right,above,below}` for the 12-col insert logic; no DOM->data mapping is needed because each cell is rendered by a Cell component that already knows its nodeId and calls `onChange(data, {lang, notUndoable})`. Static output: renderer/HTMLRenderer.tsx renders rows/cells with the same plugins' `Renderer` in readOnly mode with a NoopProvider, after `migrateValue`, `optimizeRows`, `setAllSizesAndOptimize` - usable for SSR without the editor bundle. Editor chrome is MUI 5 with react-dnd 15 and react-draggable.",
+  "core_innovation": "Per-plugin content versioning with an explicit migration chain that runs at load and at render, so stored documents never break when a cell plugin's data shape changes.",
+  "strengths": [
+    "Versioned cell plugins with `Migration` chains applied in both the editor and the static renderer - the most complete schema-evolution story in this batch.",
+    "Clean split between the document (Value) and a dependency-light static HTMLRenderer that reuses plugin Renderers read-only.",
+    "Plugin-level structural constraints: `cellPlugins` allowed-children (static or data-dependent), `childConstraints.maxChildren`, `allowNeighbour`, `isInlineable`.",
+    "Data-level i18n (`dataI18n` per lang) with per-lang draft flags; `getTextContents` gives a text-extraction hook per plugin.",
+    "Undo whitelist by action type plus a `notUndoable` escape hatch keeps UI state out of history.",
+    "MIT; TypeScript throughout; 11 open issues."
+  ],
+  "weaknesses": [
+    "Maintenance mode: content releases stopped in 2024; 2026 activity is dependency hygiene only.",
+    "The document primitive is a recursive 12-column row/cell grid - free-form layout that produces generic pages and has no concept of section archetype, arrangement or rhythm; directly contradicts the layout-genome approach.",
+    "Plugin data is `Record<string, unknown>` in the document; typing is per-plugin generics plus a bespoke JSON-Schema-ish TS type validated by ajv - not a single typed contract for the whole page.",
+    "Full-snapshot redux-undo (`past[]`, `future[]` copies of the whole Value) rather than patches; scales poorly and cannot be persisted cheaply.",
+    "Heavy editor runtime: MUI 5, redux, react-dnd, react-draggable, uniforms; rendering is React-only so it cannot overlay Astro output.",
+    "Cell sizing in twelfths and `inline` float hacks encode a Bootstrap-era grid model into the data."
+  ],
+  "patterns_to_steal": [
+    "Per-plugin `version` + `Migration({fromVersion,toVersion,migrate})` chain run by `migrateValue()` on load AND inside the static renderer -> every section variant in the human-authored library carries `schema_version` and a migration list; the Astro renderer and the CMS loader both upgrade stored SiteDefinitions before Zod validation, so the section library can evolve without breaking shipped sites.",
+    "Static HTMLRenderer reusing plugin Renderers read-only, with no editor deps -> confirms the intended split: Astro is the only renderer; the post-V1 editor is a separate app that renders through Astro, never a second render path.",
+    "Plugin-declared allowed children (`cellPlugins` as fn(data)) and `childConstraints` -> express `design_compat` / allowed-parent / slot-content rules in the section variant definition so Compat filter and editor share them.",
+    "`getTextContents(data)` per plugin -> a `extractText(sectionProps)` hook per section variant feeding the anti-slop n-gram detector and the placeholder scan.",
+    "`notUndoable` flag on actions + action-type whitelist -> label SiteDefinition mutations as document vs ephemeral in the editor's patch log.",
+    "`dataI18n` with per-language draft flags -> if multilingual sites arrive, keep locale variants at the field level of SiteDefinition with a draft marker, not as duplicated pages."
+  ],
+  "patterns_to_avoid": [
+    "Recursive 12-column row/cell grid as the document primitive -> free-form layout is exactly the slop generator we are designing against; layout must come from arrangement ids, not column sizes.",
+    "Full-snapshot undo (`past/present/future` Value copies) -> use patch pairs.",
+    "JSON-Schema-driven uniforms autoforms with ajv -> Zod is our schema source; derive forms from Zod, do not maintain a parallel JSON Schema.",
+    "MUI + redux + react-dnd editor stack -> far heavier than an overlay editor needs; irrelevant to the 180 kB site budget but a maintenance burden.",
+    "Untyped plugin data in the document -> the page contract must be one discriminated Zod union, not per-plugin generics."
+  ],
+  "reusable_patterns": [
+    "VersionedPluginMigrations: each content type carries a version and a migration chain applied on load and on render.",
+    "RendererEditorSplit: a dependency-light static renderer that consumes the same document and component set as the editor.",
+    "PluginDeclaredChildConstraints: allowed child types and counts declared on the content type, optionally as a function of its data.",
+    "TextContentExtractor: a per-content-type hook that returns plain text for search, QA and slop detection.",
+    "UndoActionWhitelist: history participation decided by an action-type whitelist plus a per-action notUndoable flag."
+  ],
+  "adoption_strategy": "Adapt (narrow) - do not use @react-page/editor; its grid model and React-only rendering are incompatible with an Astro-rendered, arrangement-driven page. Copy exactly one mechanism now, because it affects V1: per-section-variant `schema_version` with a migration chain that runs before Zod parsing in both the loader and the renderer (core/migrations/migrate.ts is a 140-line reference). Copy `getTextContents` as a per-variant text extractor for the anti-slop and placeholder gates. Note the `cellPlugins(data)` idea when writing `design_compat`.",
+  "recommendation": "Adapt",
+  "novelty_score": 4,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": [
+    "cms",
+    "renderer",
+    "visual_editor",
+    "anti_slop",
+    "qa_gate"
+  ],
+  "evidence": [
+    "packages/editor/package.json: @react-page/editor, MIT, deps @mui/material 5, redux 4, redux-undo 1, react-dnd 15, uniforms + uniforms-bridge-json-schema, ajv 8",
+    "packages/editor/src/core/types/node.ts: Cell, Row, Value {id, rows, version}, ValueWithHistory, PartialCell, isRow()",
+    "packages/editor/src/core/types/plugins.ts: CellPlugin<DataT> (version, migrations, Renderer, controls, cellPlugins, childConstraints, serialize/unserialize, getTextContents), CellPluginComponentProps (nodeId, data, onChange(data, {lang, notUndoable}))",
+    "packages/editor/src/core/types/constraints.ts: ChildConstraints.maxChildren (EXPERIMENTAL)",
+    "packages/editor/src/core/types/jsonSchema.ts: JSON-Schema-like TS type with uniforms/showIf/enum",
+    "packages/editor/src/core/migrations/Migration.ts and migrate.ts: Migration class, sanitizeVersion, migrate(), migrateValue() with EDITABLE_MIGRATIONS and per-plugin version mismatch handling",
+    "packages/editor/src/core/reducer/values/index.ts: undoable(value, {filter: action whitelist + notUndoable, neverSkipReducer, syncFilter})",
+    "packages/editor/src/renderer/HTMLRenderer.tsx: static renderer using migrateValue, optimizeRows, setAllSizesAndOptimize, NoopProvider",
+    "gh api: releases v5.4.6 2026-07-28, v5.4.5 2024-11-05, v5.4.4 2023-04-26; commits since 2025-01-01: 7 (all July 2026 tooling/security, incl. PR #1357 from branch claude/lerna-yarn-4-compat)"
+  ]
+}

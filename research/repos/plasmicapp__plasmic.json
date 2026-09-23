@@ -1,0 +1,73 @@
+{
+  "repo": "plasmicapp/plasmic",
+  "url": "https://github.com/plasmicapp/plasmic",
+  "category": "visual-editors",
+  "license": "MIT for packages/ and plasmicpkgs/; AGPL-3.0 for platform/ (Plasmic Studio, codegen, renderer)",
+  "stars": 7034,
+  "last_push": "2026-09-23",
+  "status_note": "active (daily pushes). Split-licence monorepo: the SDKs (host, loader-*, react-web, cli, data-sources) are MIT; the actual visual editor and its backend (platform/wab, platform/react-renderer, canvas-packages, live-frame) are AGPL-3.0 and heavy to self-host (Postgres + typeorm migrations, pnpm setup-all, Jenkins release). Default loaders talk to the SaaS codegen/CDN (codegen.plasmic.app). GitHub issues are disabled (has_issues=false); support is forum-only.",
+  "core_problem": "A Figma-grade visual design tool that produces real React components: designers build pages/components with variants, slots, tokens and data bindings in Studio, and the output is either fetched as compiled React bundles at runtime (loader) or synced as generated .tsx into the codebase (codegen); code components from the host app are registered into Studio with a rich prop-meta schema.",
+  "architecture": "Three layers. (1) Host registration (packages/host, MIT): registerComponent(Component, CodeComponentMeta) pushes { component, meta } into window.__PlasmicComponentRegistry; CodeComponentMeta (packages/host/src/registerComponent.ts) = { name, displayName, importPath, importName/isDefaultExport, props: { [p]: PropType }, states, componentHelpers, actions, styleSections, isRepeatable, defaultStyles, templates (ComponentTemplates keyed by name with previewImg), parentComponentName, isAttachment, providesData, figmaMappings/figmaPropsTransform, alwaysAutoName, hideFromContentCreators, refActions, treeLabel, defaultDisplay, trapsFocus, variants: { [name]: { cssSelector, displayName } } }. PropType (packages/host/src/types/component-types.ts) is a large union — string/href/color/class/richText/code/cardPicker, boolean, number/slider, object/array (nested fields), choice (single/multi, options may be context functions), slot ({ allowedComponents, allowRootWrapper, isRepeated, mergeWithParent, renderPropParams, unstable__isMainContentSlot, defaultValue: PlasmicElement }), imageUrl, dataSource, dataPicker, exprEditor, eventHandler(argTypes), custom (React control with studioOps), dynamic, dateString/dateRangeStrings — each with context-dependent hidden(ctx), readOnly(ctx), validator(value, ctx) -> string|true, defaultValue/defaultExpr, invariantable, editOnly/uncontrolledProp. Sibling registrars: registerToken (style tokens from code), registerGlobalContext, registerFunction, registerTrait. PlasmicElement (packages/host/src/element-types.ts) is a small declarative template DSL: { type: 'box'|'vbox'|'hbox'|'page-section'|'text'|'img'|'button'|'input'|'textarea'|'component'|'default-component'|'json', tag, value, styles: CSSProperties & { layout }, attrs (whitelisted keys), children } used for slot defaults and component templates. (2) Canvas host (packages/host/src/canvas-host.tsx): the app exposes a route rendering <PlasmicCanvasHost/>; Studio loads that URL in an iframe with #canvas=true (or live=true), the host injects studio.js from staticBaseUrl and portals whatever root node Studio hands it (setPlasmicRootNode) into #plasmic-app.__wab_user-body — so Studio is the renderer and the host only supplies registered code components and React runtime; PlasmicCanvasContext tells components they are on canvas. (3) Delivery: loader-fetcher fetches LoaderBundleOutput { modules: { browser, server }: CodeModule { fileName, code, imports } | AssetModule, components: ComponentMeta[] { id, name, path, isPage, cssFile, entry, isCode, pageMetadata, serverQueriesExecFuncFileName }, globalGroups, projects: ProjectMeta { remoteFonts, styleTokensProviderFileName, globalContextsProviderFileName }, activeSplits: (experiment|segment) Split[], deferChunksByDefault }; loader-core Registry.load compiles each CodeModule with new Function('require','exports', code) (browser or Node) and resolves imports against registered host modules; loader-react renders via PlasmicRootProvider/PlasmicComponent with renderToString/hydrateFromElement and @plasmicapp/prepass to extract query data for SSR. Codegen path: packages/cli 'plasmic sync' writes Plasmic*.tsx presentational components + wrappers and style tokens into the repo (actions/sync*.ts, migrations/ for generated-code format changes). The Studio document model lives in platform/wab/src/wab/shared/model/model-schema.ts as a custom DSL: Site { components, arenas/pageArenas/componentArenas, globalVariantGroups, styleTokens (Color|Spacing|Opacity|LineHeight|FontFamily|FontSize with variantedValues), styleTokenOverrides, mixins, themes, imageAssets, splits, globalContexts, defaultComponents, pageWrapper } with @WeakRef annotations enforcing a single strong-reference tree (cycles only via weak refs) — this underpins bundling, undo logs and cross-project imports. Undo/redo, multiplayer, branching and Figma import are inside platform/wab (AGPL). No Astro loader exists; loader-vue/svelte/angular wrap the React runtime.",
+  "core_innovation": "A design-tool-fidelity editor whose native document is a strongly-typed component/variant/token tree that compiles to real React code, with a registration meta-schema rich enough (context-dependent visibility, validators, slot allow-lists, templates) to make arbitrary host components first-class design primitives.",
+  "strengths": [
+    "The richest component registration schema in the field: per-prop hidden/readOnly/validator as functions of (props, contextData), slot allowedComponents, hideFromContentCreators, templates with preview images, variants exposed by cssSelector — a superset of what a constrained owner editor needs.",
+    "First-class design tokens in the model (StyleToken type enum with variantedValues) and registerToken from code, plus global variant groups (screen, theme) — mirrors our design_system token layer and the idea that tokens are selected, not typed.",
+    "PlasmicElement is a tiny, whitelisted declarative element DSL (types, tags, attr keys) — a good reference for how small a 'default content template' language can be.",
+    "@WeakRef tree discipline in model-schema.ts: one strong-ownership path per node, everything else weak — a principled rule for serializable documents, bundling and undo.",
+    "Loader bundle carries page metadata, fonts, tokens provider, splits and server-query exec hooks per component, i.e. a complete 'publish artefact' contract.",
+    "SSR story is thought through (prepass query extraction, renderToString/hydrate, server/browser module sets).",
+    "MIT SDK layer is substantial and separable from the AGPL Studio."
+  ],
+  "weaknesses": [
+    "The editor is AGPL-3.0 and enormous (platform/wab; repo languages show 33 MB of TypeScript); self-hosting means running Studio, codegen and Postgres and accepting copyleft on modifications.",
+    "Design freedom is the product: arbitrary CSS, free-form boxes, Figma import — precisely the slop vector our pipeline exists to remove; 'content creator mode' guardrails are Studio-side config, not a schema-level contract.",
+    "React everywhere: generated code, runtime, loaders; Vue/Svelte/Angular loaders embed React; no Astro target. Runtime loader executes fetched code via new Function — acceptable at build time only.",
+    "Default delivery depends on SaaS codegen/CDN (codegen.plasmic.app); packages require exact-version lockstep and window globals (__PlasmicComponentRegistry) that break with duplicate installs.",
+    "The document model (Site/Component/TplNode/variants/vsettings) is a design-tool model, not a section contract; nothing encodes narrative beats, evidence requirements or asset constraints.",
+    "GitHub issues disabled; roadmap and support live in a proprietary forum — weak open-source governance signal despite the code being public.",
+    "Registration meta is TypeScript interfaces validated at Studio runtime, not a portable schema (no JSON Schema/Zod export)."
+  ],
+  "patterns_to_steal": [
+    "Context-dependent prop meta (hidden/readOnly/validator as functions of current props + context) -> visual_editor: owner-editable fields whose visibility and bounds depend on the selected arrangement (e.g. quote length limit tightens when arrangement is 'pull_quote_large').",
+    "Slot allowedComponents + hideFromContentCreators -> Compat filter and editor palette: a per-slot eligible set computed from design_compat, and section variants hidden from owners but available to the agent.",
+    "StyleToken enum with variantedValues -> design_system: token values per variant (dark mode, reduced motion) declared in the token file, selected by id, never emitted by the model.",
+    "@WeakRef single-ownership tree rule -> SiteDefinition Zod schema: sections own their nodes; cross-references (facts, assets, design ids) are ids only, so undo logs and diffs stay tree-local.",
+    "Component templates with previewImg (ComponentTemplates) -> section library: each arrangement ships an authored preview image and a default props template, used by the editor palette and the Gap Report.",
+    "LoaderBundleOutput as publish artefact (components meta + page metadata + fonts + splits) -> Decision Manifest/renderer: publish one manifest listing pages, section ids, fonts, tokens provider and QA results.",
+    "PlasmicElement whitelisted element DSL -> anti_slop tier-1: a closed vocabulary of allowed tags/attrs for any agent-authored micro-content (e.g. rich text inside a section)."
+  ],
+  "patterns_to_avoid": [
+    "Free-form Figma-style canvas editing of layout and CSS -> owners must only edit copy/assets within a fixed genome; any drag-anything canvas reintroduces slop.",
+    "Runtime code loading (Registry.load via new Function of CDN bundles) -> build-time only; the public site ships static Astro output with no dynamic module loading.",
+    "Registering the catalogue via side-effectful window globals -> our catalogue is the versioned Zod library imported by both renderer and editor.",
+    "Adopting the AGPL platform for the post-V1 editor -> licence contagion plus a design-tool UX we do not want; only patterns cross over.",
+    "Figma import / vector-to-DOM translation -> rejected 'cloner'/mining direction; no value for a constraint-first pipeline."
+  ],
+  "reusable_patterns": [
+    "ContextDependentFieldMeta: a field's hidden/readOnly/validator are pure functions of the node's current props and editor context, evaluated on every change.",
+    "SlotAllowList: a slot declares the set of component ids it accepts and whether wrapper roots are allowed; validators and the palette share it.",
+    "VariantedToken: a design token holds a base value plus per-variant overrides, resolved by the active variant set at render time.",
+    "WeakRefTreeModel: document nodes form a strict ownership tree; all other references are weak ids, guaranteeing serializability and local undo.",
+    "PublishBundleManifest: a publish emits a manifest listing every component/page with metadata, assets, fonts and experiment splits, consumed by the renderer without touching the editor.",
+    "WhitelistedElementDSL: a closed set of element types/tags/attr keys for declarative default content."
+  ],
+  "adoption_strategy": "Ignore as a tool, Adapt its schemas — Plasmic's Studio is AGPL, React-only, SaaS-tethered by default and built for design freedom, so it cannot be our editor or renderer. Its registration and model schemas, however, are the most complete reference for how to express editing constraints as data: copy context-dependent field meta, slot allow-lists, varianted tokens, component templates with previews, and the weak-ref ownership rule into the Zod SiteDefinition and section-library schemas now (difficulty ~3 for the patterns). Do not attempt to run platform/.",
+  "recommendation": "Ignore",
+  "novelty_score": 6,
+  "difficulty_score": 8,
+  "pipeline_stages_affected": ["visual_editor", "design_system", "renderer", "cms"],
+  "evidence": [
+    "README.md 'License' section and LICENSE.md (MIT) vs LICENSE.platform.md (AGPL-3.0): 'All content outside of platform/ is licensed under the MIT license... platform/ is licensed under the AGPL'",
+    "packages/host/src/registerComponent.ts (CodeComponentMeta: props, states, actions, styleSections, templates, figmaMappings, hideFromContentCreators, variants, refActions; window.__PlasmicComponentRegistry)",
+    "packages/host/src/types/component-types.ts (PropType union; PropTypeBase hidden/readOnly; ExtendedDefaultable validator/defaultExpr; RichSlotType allowedComponents/allowRootWrapper/isRepeated/mergeWithParent/defaultValue; StudioOps; CustomControlProps)",
+    "packages/host/src/element-types.ts (PlasmicElement DSL: box/vbox/hbox/page-section/text/img/button/input/component with whitelisted attrs)",
+    "packages/host/src/canvas-host.tsx (PlasmicCanvasHost: #canvas=true / live=true, injects studio.js from staticBaseUrl, portals Studio root into #plasmic-app.__wab_user-body, PlasmicCanvasContext)",
+    "packages/loader-fetcher/src/api.ts (LoaderBundleOutput, ComponentMeta, ProjectMeta, Split/ExperimentSlice/SegmentSlice; default apiHost codegen-origin.plasmic.app)",
+    "packages/loader-core/src/registry.ts (Registry.load: new Function('require','exports', code), __PLASMIC_CHUNKS)",
+    "packages/loader-react/src/render.tsx (renderToString, extractPlasmicQueryDataFromElement, hydrateFromElement)",
+    "platform/wab/src/wab/shared/model/model-schema.ts (Site, StyleToken types with variantedValues, @WeakRef tree annotations, Type hierarchy incl. RenderableType/RenderFuncType allowed lists)",
+    "packages/cli/src/actions/sync*.ts and migrations/ (codegen sync of components, style tokens, global variants, icons, images)",
+    "package.json root scripts (bootstrap:platform, db:setup, typeorm migration:run, Jenkins release note); platform/ directory listing (wab, react-renderer, canvas-packages, live-frame, loader-html-hydrate); packages/ listing (no loader-astro)",
+    "raw/plasmicapp_plasmic/meta.json (7034 stars, has_issues false, pushed 2026-09-23, size 320552 KB), languages.json (TypeScript 33.6 MB)"
+  ]
+}

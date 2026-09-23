@@ -1,0 +1,68 @@
+{
+  "repo": "theatre-js/theatre",
+  "url": "https://github.com/theatre-js/theatre",
+  "category": "3d-webgl",
+  "license": "Apache-2.0",
+  "stars": 12693,
+  "last_push": "2024-08-14",
+  "status_note": "stalled in public: README says development of 1.0 moved to a private repo 'temporarily'; no public push for 25 months; npm @theatre/core 0.7.x",
+  "core_problem": "Author high-fidelity keyframe animation in a browser GUI (studio) and play it back deterministically from exported JSON state via a small runtime (core), for DOM, SVG, three.js or anything with numeric props.",
+  "architecture": "Monorepo packages/: core (52 src files, dep only @theatre/dataverse, a reactive 'prism' system), studio (362 src files, the GUI), react, r3f, theatric, dataverse, saaz (sync/CRDT experiments), sync-server. Data model (packages/core/src/types/private/core.ts and types/public.ts): ProjectState_Historic {sheetsById, revisionHistory: string[], definitionVersion} -> SheetState_Historic {staticOverrides.byObject[objectAddressKey] = SerializableMap, sequence?: {type:'PositionalSequence', length, subUnitsPerUnit, tracksByObject[key] = {trackIdByPropPath[encodedPath] -> trackId, trackData[trackId] = {type:'BasicKeyframedTrack', keyframes: PointableSet<BasicKeyframe>}}}}; BasicKeyframe = {id, value, position, handles:[lx,ly,rx,ry] (bezier), connectedRight, type?}. Prop types (packages/core/src/propTypes/index.ts): t.number(default,{range,nudgeMultiplier,nudgeFn}), t.string, t.boolean, t.rgba, t.stringLiteral, t.compound({...}), t.image, t.file; every config carries `default`, `interpolate(left,right,t)` and `deserializeAndSanitize(json)` (numbers are clamped to range on load). Runtime: getProject(id,{state,assets:{baseUrl}}) -> project.sheet(name) -> sheet.object(key, propsConfig) -> object.value / onValuesChange; SheetObject.getValues() is a dataverse prism that deep-merges defaults + initial + static overrides + sequenced values (interpolationTripleAtPosition per track) and recomputes only what changed. sequences/playbackControllers drive time via rAF (rafDrivers.ts) or an AudioPlaybackController. AI wiring: none.",
+  "core_innovation": "Animation as versioned, sanitised JSON state (definitionVersion + revisionHistory + per-prop deserializeAndSanitize) authored in a GUI and replayed by a runtime that layers defaults, static overrides and keyframe tracks addressed by object key + encoded prop path.",
+  "strengths": [
+    "State format is a genuine data contract: keyframes keyed by stable ids, tracks addressed by (object address, encoded prop path), bezier handles explicit, and definitionVersion for migrations; exactly the shape a 'motion profile authored at library time' should have.",
+    "Prop-type configs bundle default + interpolate + deserializeAndSanitize, so untrusted or stale JSON is clamped/sanitised on load rather than trusted: same philosophy as our Zod contracts.",
+    "Layered value resolution (defaults -> initial -> static -> sequenced) separates design-time defaults from per-instance overrides from motion, which maps onto design-system tokens -> section variant -> arrangement motion.",
+    "Core runtime is small (30.7 kB gzip) and framework-agnostic; studio is a dev-only dependency and can be stripped from production builds.",
+    "Apache-2.0; @theatre/r3f shows how a scene graph exposes props to a sequencer without owning the renderer."
+  ],
+  "weaknesses": [
+    "Maintenance: last public commit 2024-08-14; README announces a private 1.0 rewrite that never surfaced. Adopting the runtime means owning a fork.",
+    "@theatre/core has sideEffects:true and a global projects singleton (getProject throws if called twice with different config), designed as an app-level singleton rather than an island-scoped module.",
+    "Playback is rAF-driven JS (coreTicker/rafDrivers), not CSS/WAAPI: every animated prop costs main-thread work per frame, which conflicts with a <=120 ms main-thread motion budget and near-zero-JS islands.",
+    "No prefers-reduced-motion awareness; sequences play regardless.",
+    "JSON state is 'any' at the API boundary (IProjectConfig.state?: any) and the historic format has tolerated undocumented shape drift (keyframe.type defaults for older states), so a strict schema must be written by us.",
+    "The studio GUI is heavy (362 files, React) and its export is a project-level blob, not per-section motion profiles; sharing profiles across a section library needs our own tooling."
+  ],
+  "patterns_to_steal": [
+    "ProjectState_Historic {definitionVersion, revisionHistory, sheetsById} -> motion profiles in the section library: each arrangement's motion is a versioned JSON document with a schema version and revision list, human-authored, reviewed like a playbook.",
+    "PropTypeConfig {default, interpolate, deserializeAndSanitize, range} -> Zod schema for motion tokens: every animatable prop declares default, allowed range and an interpolation kind; loading clamps rather than fails.",
+    "Track addressing by (objectAddressKey, encoded prop path) -> SiteDefinition motion: keyframe tracks target `sectionId.elementRole.property` paths, never CSS selectors, so the renderer can compile them to CSS keyframes / WAAPI / ScrollTimeline deterministically.",
+    "Layered resolution defaults -> static overrides -> sequenced -> assembly: design_system motion defaults, section variant `motion` budget as static override, arrangement signature_move as the sequenced layer; intensity curve computed from this stack.",
+    "Studio as dev-only authoring surface -> library-time tooling: a human authors curves in a GUI, exports JSON, a transpiler converts to our schema; the GUI never ships."
+  ],
+  "patterns_to_avoid": [
+    "Shipping @theatre/core as the runtime -> unmaintained, singleton-global, rAF-driven JS animation in every island; our playback should compile to CSS/WAAPI with zero runtime dependency.",
+    "Project-level monolithic state blob -> sections need per-arrangement motion profiles that compose; keep profiles small and addressable.",
+    "Untyped `state?: any` boundary -> violates the typed-JSON (Zod) contract rule; validate on load.",
+    "Bezier-handle keyframes for every prop -> over-expressive for a marketing site; restrict interpolation to a named easing set from the design system."
+  ],
+  "reusable_patterns": [
+    "VersionedMotionState: animation stored as JSON with definitionVersion and revisionHistory, migrated deterministically on load.",
+    "SanitisingPropConfig: each animatable prop carries default + range + interpolate + deserializeAndSanitize; loading clamps invalid values.",
+    "PathAddressedTracks: keyframe tracks keyed by object address and encoded prop path rather than DOM selectors.",
+    "LayeredValueResolution: final value = defaults + static overrides + sequenced, recomputed incrementally.",
+    "AuthorInGuiShipAsData: a dev-only editor produces data; production consumes data through a different, minimal runtime (or a compiler)."
+  ],
+  "adoption_strategy": "Adapt — take the data model, not the library. Define a Zod `MotionProfile` schema borrowing definitionVersion/revisionHistory, path-addressed keyframe tracks, per-prop {default, range, easing} with sanitise-on-load, and the defaults->override->sequence layering; store one profile per arrangement in the section library and compile it at build time to CSS @keyframes / WAAPI / ScrollTimeline (and to the WebGL island's uniform timeline for the one allowed 3D section). Optionally use Theatre studio locally as the human authoring GUI with a one-way exporter into our schema, so the stalled runtime never ships. Do not depend on @theatre/core at runtime given the 25-month silence and private-repo 1.0.",
+  "recommendation": "Adapt",
+  "novelty_score": 7,
+  "difficulty_score": 4,
+  "pipeline_stages_affected": [
+    "motion",
+    "design_system",
+    "assembly",
+    "visual_editor",
+    "renderer"
+  ],
+  "evidence": [
+    "packages/core/src/types/private/core.ts (SheetState_Historic, HistoricPositionalSequence, tracksByObject/trackIdByPropPath/trackData, BasicKeyframedTrack, ProjectState_Historic {sheetsById, revisionHistory, definitionVersion}, OnDiskState)",
+    "packages/core/src/types/public.ts lines 234-242 (IProjectConfig {state?: any, assets.baseUrl}) and 496-507 (BasicKeyframe {id,value,position,handles,connectedRight,type})",
+    "packages/core/src/propTypes/index.ts (t.number with range/nudgeMultiplier/nudgeFn validation, numberDeserializer clamps to range, t.compound sanitizeCompoundProps + deserializeAndSanitize, t.image/t.file with interpolate)",
+    "packages/core/src/sheetObjects/SheetObject.ts getValues() (prism deep-merge of defaults + initial + static + sequenced; interpolationTripleAtPosition)",
+    "packages/core/src/coreExports.ts getProject (projectsSingleton, throws on differing config)",
+    "packages/core/package.json (0.7.0, sideEffects true, dep @theatre/dataverse); packages/react, r3f, theatric, dataverse manifests",
+    "README.md notice: 'Theatre.js 1.0 is around the corner. We have temporarily moved development to a private repo'; meta.json pushed_at 2024-08-14",
+    "bundlephobia @theatre/core 0.7.2 = 97.7 kB min / 30.7 kB gzip"
+  ]
+}

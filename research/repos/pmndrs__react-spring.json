@@ -1,0 +1,57 @@
+{
+  "repo": "pmndrs/react-spring",
+  "url": "https://github.com/pmndrs/react-spring",
+  "category": "motion",
+  "license": "MIT",
+  "stars": 29160,
+  "last_push": "2026-09-15",
+  "status_note": "active but slow; npm latest 10.1.2, 11.0.0-beta.0 published 2026-06-21; default branch 'next'; 76 open issues",
+  "core_problem": "Spring-physics-first animation for React (and react-three-fiber) where values are driven by mass/tension/friction rather than durations, with interruptible, velocity-preserving transitions.",
+  "architecture": "pnpm/Turbo monorepo. packages/core (Controller, SpringValue, FrameValue, Interpolation, hooks useSpring/useSprings/useTrail/useTransition/useChain, SpringContext), packages/animated (animated() HOC wrapping host elements and applying values without React re-renders), packages/shared (globals.ts with assign({skipAnimation, frameLoop, requestAnimationFrame, onDemand}), fluids, hooks/useReducedMotion.ts), packages/rafz (frameloop scheduler with demand mode), packages/parallax, packages/types; targets/web (@react-spring/web 11.0.0-beta.0, ESM-only, peer react 16.8-19) and targets/three. useReducedMotion (shared/src/hooks/useReducedMotion.ts) listens to matchMedia('(prefers-reduced-motion)') and calls Globals.assign({skipAnimation: matches}) so every Controller/SpringValue jumps to goal values. All animation runs in a JS frameloop (rafz) on the main thread - no WAAPI path. Repo carries .specify/specs (spec-kit) and CLAUDE.md.",
+  "core_innovation": "Springs as the default primitive with velocity carry-over between interruptions, and an animated() binding that writes styles outside React's render cycle.",
+  "strengths": [
+    "Best-in-class spring semantics (interruptible, velocity-preserving) for stateful UI interactions.",
+    "Global skipAnimation switch wired to prefers-reduced-motion is a clean single point of control (Globals.assign).",
+    "rafz 'onDemand' frameloop lets a host drive frames (r3f) - a good pattern for a single shared ticker.",
+    "MIT; @react-spring/web measured 42.7 kB/17.2 kB gz (esbuild, React external)."
+  ],
+  "weaknesses": [
+    "React-only (hooks + animated components); no vanilla entry - unusable from Astro without hydrating a React island per animated section.",
+    "Pure JS frameloop on the main thread (no WAAPI), so cost scales with number of springs and directly eats the 120 ms main-thread budget.",
+    "Springs target interaction-heavy app UI (drawers, drag, lists); marketing-site motion is mostly scroll-reveal and timeline choreography, which react-spring handles poorly (no scroll trigger/pin, no timeline labels).",
+    "Slow cadence: v10 took 7 months from 9.7.5 (2024-10) to 10.0.0 (2025-05); v11 has been in beta since 2026-06.",
+    "useReducedMotion returns null on first render (SSR), so reduced-motion is only honoured after hydration."
+  ],
+  "patterns_to_steal": [
+    "Globals.assign({skipAnimation}) wired to prefers-reduced-motion -> a single process-wide 'motion kill switch' flag in our runtime that every allowlisted effect must consult; test it in the Playwright QA run by emulating reduced motion -> motion / qa_gate.",
+    "Spring config presets (default/gentle/wobbly/stiff/slow/molasses named configs) -> if any spring is ever allowlisted, expose only named presets, never raw tension/friction -> design_system / motion."
+  ],
+  "patterns_to_avoid": [
+    "React-hook-driven animation for static marketing sections -> forces React islands, hydration cost, and per-section JS; contradicts near-zero-JS Astro.",
+    "useTrail/useTransition list choreography -> the 'staggered cards springing in' idiom is generic AI/SaaS-template slop.",
+    "@react-spring/three for hero 3D -> violates the <=1 WebGL section / poster-fallback rule unless strictly gated."
+  ],
+  "reusable_patterns": [
+    "GlobalSkipAnimation: one mutable global consulted by every animation controller to jump to goal state.",
+    "OutOfRenderStyleWrite: animated() applies interpolated values directly to DOM nodes, bypassing React reconciliation.",
+    "DemandFrameloop: frameloop that only schedules rAF when work is pending and can defer to a host clock."
+  ],
+  "adoption_strategy": "Ignore for V1. The stack is Astro with near-zero JS; react-spring requires React islands and a main-thread frameloop and offers nothing for scroll choreography. Revisit only for the post-V1 visual editor UI (React app chrome), where spring interactions are appropriate - not for shipped sites.",
+  "recommendation": "Ignore",
+  "novelty_score": 4,
+  "difficulty_score": 2,
+  "pipeline_stages_affected": [
+    "motion",
+    "visual_editor"
+  ],
+  "evidence": [
+    "raw/pmndrs_react-spring/meta.json, README.md, package.json (workspace scripts, oxlint/tsdown)",
+    "gh api contents/packages and contents/targets (next branch): core, animated, shared, rafz, parallax, types; web, three",
+    "targets/web/package.json (11.0.0-beta.0, ESM-only, peer react ^16.8||17||18||19)",
+    "packages/shared/src/globals.ts (skipAnimation, assign(), frameLoop, onDemand)",
+    "packages/shared/src/hooks/useReducedMotion.ts (matchMedia -> assign({skipAnimation}))",
+    "packages/core/src/index.ts exports; docs/app/routes/docs.utilities.use-reduced-motion.mdx",
+    "npm registry dist-tags/time for @react-spring/web (10.1.2 latest; 11.0.0-beta.0 2026-06-21)",
+    "esbuild measurement e_rspring (scratchpad/bundle)"
+  ]
+}

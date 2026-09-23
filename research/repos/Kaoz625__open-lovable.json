@@ -1,0 +1,65 @@
+{
+  "repo": "Kaoz625/open-lovable",
+  "url": "https://github.com/Kaoz625/open-lovable",
+  "category": "ai-website-builders",
+  "license": "MIT",
+  "stars": 1,
+  "last_push": "2026-05-02",
+  "status_note": "personal derivative of mendableai/open-lovable (Firecrawl); not a GitHub fork; adds a Crawl4AI FastAPI microservice + Docker; commits .omc/ agent-state files and __pycache__; single contributor",
+  "core_problem": "Clone or re-imagine an existing website: scrape a URL to markdown + screenshot, hand it to an LLM that emits a full Vite/React project as <file> tags, write those files into a remote sandbox (E2B or Vercel Sandbox) running Vite, and iterate with targeted edits.",
+  "architecture": "Next.js app router with ~25 API routes under app/api/*. The fork's own delta (CHANGES.md) is small: five routes that called Firecrawl now call crawl4ai-service/main.py, a 165-line FastAPI wrapper exposing GET /scrape (AsyncWebCrawler with BrowserConfig(enable_stealth) + CrawlerRunConfig(magic=True, wait_until=networkidle, delay_before_return_html=3.0), returns {markdown}) and GET /screenshot (base64 PNG); optional residential proxy and a commented-out CapSolver Turnstile solver. /api/search is stubbed to [] and /api/extract-brand-styles now returns raw markdown because Firecrawl's branding format has no equivalent. Upstream architecture retained: app/api/scrape-url-enhanced/route.ts fetches markdown+screenshot in parallel, sanitizes smart quotes and returns {content, screenshot, structured}. app/api/generate-ai-code-stream/route.ts (2k lines) is a single streaming Vercel AI SDK call: builds a ~400-line system prompt of shouted rules ('CRITICAL RULE - VIOLATION WILL RESULT IN FAILURE'), appends conversation context from global.conversationState (scraped websites, recently created files 'DO NOT RECREATE'), for edits fetches sandbox files, builds a FileManifest (types/file-manifest.ts: FileInfo with imports/exports/componentInfo, routes, componentTree) via lib/file-parser.ts regexes, classifies the prompt with lib/edit-intent-analyzer.ts (regex table -> EditType UPDATE_COMPONENT/ADD_FEATURE/FIX_ISSUE/REFACTOR/FULL_REBUILD/UPDATE_STYLE/ADD_DEPENDENCY plus a fileResolver per type) and lib/context-selector.ts (primary files to edit + App/tailwind/index.css/package.json always in context), then asks for complete files in <file path=\"...\">...</file> tags (or <edit> blocks when MORPH_API_KEY enables lib/morph-fast-apply.ts). app/api/apply-ai-code-stream/route.ts parseAIResponse() regex-extracts <file>, <package(s)>, <command> tags, normalizes paths under /home/user/app/src, writes via the SandboxProvider abstraction (lib/sandbox/types.ts abstract class with e2b-provider.ts / vercel-provider.ts; factory.ts picks by env) and installs detected packages. lib/build-validator.ts validateBuild() waits 3 s, fetches the sandbox URL, and decides success by string checks (not the default Vite page, contains id=\"root\", no 'vite-error-overlay'); classifyError() maps messages to missing-package/syntax/timeout/not-rendered and calculateRetryDelay() picks backoff. State is process-global (global.activeSandbox, global.conversationState, global.sandboxState: ~66 references across three routes), i.e. single-tenant. app/generation/page.tsx (4.1k lines) orchestrates the UI: scrape-screenshot -> extract-brand-styles -> scrape-url-enhanced -> generate-ai-code-stream -> apply-ai-code-stream -> sandbox iframe, plus inject-inspector for click-to-select.",
+  "core_innovation": "Nothing new in the fork itself; upstream's idea is a FileManifest + regex edit-intent classifier that narrows an LLM edit to predicted target files, with generated code exchanged as <file> tags and validated by probing the live Vite sandbox.",
+  "strengths": [
+    "SandboxProvider abstract class (createSandbox/runCommand/writeFile/readFile/listFiles/installPackages/getSandboxUrl/terminate) cleanly separates E2B from Vercel Sandbox behind one interface.",
+    "FileManifest data model (imports/exports/componentInfo/routes/componentTree/styleFiles) is a reasonable minimal project index for targeted edits, and EditIntent carries confidence + suggestedContext.",
+    "The Crawl4AI service keeps a stable {markdown} contract so callers did not change; docker-compose wires health checks between the two containers.",
+    "build-validator's error taxonomy (missing-package, syntax-error, sandbox-timeout, not-rendered, vite-error) with per-type retry delays is a small, reusable classification.",
+    "extractMissingPackages() parses three import-failure message shapes and feeds auto-install: a concrete self-heal loop."
+  ],
+  "weaknesses": [
+    "The fork adds almost nothing architecturally; it degrades upstream (search stubbed, brand extraction reduced to raw markdown) and commits tool state (.omc/, __pycache__, .replit-tasks).",
+    "Website-cloning is the pipeline the architect already rejected for V1; the Cloudflare/anti-bot bypass layers (stealth driver, residential proxy, CAPTCHA solving) are a legal and ethical liability for an agency product.",
+    "Generation is one streaming shot with a prompt built from shouted imperatives and emoji; there is no plan, no schema, no structured output; correctness relies on regex-parsing <file> tags from free text.",
+    "Validation is string-sniffing the sandbox HTML after a fixed 3 s sleep (no 'vite-error-overlay', has id=root); no axe, Lighthouse, or runtime execution checks.",
+    "Process-global mutable state (global.activeSandbox etc.) makes it single-user by construction; 4.1k-line page component and 2k-line route file.",
+    "Regex file parser and regex intent classifier are brittle (upstream comments admit fallbacks); brand extraction is now 'the AI can infer brand styles from markdown'.",
+    "1 star, one contributor, last push May 2026; upstream mendableai/open-lovable is the maintained lineage."
+  ],
+  "patterns_to_steal": [
+    "Error taxonomy + per-class retry policy (classifyError/calculateRetryDelay) -> QA/fix loop: classify Playwright/Lighthouse/axe failures into fixed categories with distinct retry or escalation rules.",
+    "Provider abstraction for the execution environment (SandboxProvider abstract class) -> agent orchestration: one interface for local build vs remote preview runner so Astro builds can run in CI, locally, or a sandbox without touching the pipeline.",
+    "Edit-intent -> target-file narrowing (FileManifest + EditIntent.targetFiles/suggestedContext) -> post-V1 visual editor and fix loop: map a fix request to the specific SiteDefinition sections and design tokens it may touch, and pass only those to the model.",
+    "Scrape contract {markdown, screenshot} with quote sanitization -> research stage only as an input to the FactRegistry (owner-supplied URLs), never as a design corpus."
+  ],
+  "patterns_to_avoid": [
+    "Crawl -> screenshot -> 'clone this site' generation -> rejected website-cloner pipeline; trade-dress and copyright exposure.",
+    "Cloudflare bypass / residential proxy / CAPTCHA solving -> not acceptable for an agency product; if we crawl, we crawl owner-authorized sources politely.",
+    "Free-text <file> tag output parsed by regex -> our model output is Zod-validated JSON selections, never source code.",
+    "Prompt engineering by shouting (dozens of 'CRITICAL ... VIOLATION = FAILURE' lines) -> replace with schema constraints and deterministic gates.",
+    "Validation by sniffing HTML strings after a sleep -> use real Playwright crawl + axe + Lighthouse budgets.",
+    "Process-global state for sandbox/conversation -> pipeline state must be persisted per job (Postgres) and snapshotted."
+  ],
+  "reusable_patterns": [
+    "ErrorClassRetryPolicy: map failure messages to a small enum and attach a distinct backoff/escalation per class.",
+    "ExecutionProviderInterface: abstract create/run/write/read/list/install/url/terminate over interchangeable sandboxes.",
+    "IntentToTargetNarrowing: classify an edit request and resolve it to the minimal set of artefacts the model may modify.",
+    "StableScrapeContract: swap scraping backends behind a fixed {markdown, screenshot} shape."
+  ],
+  "adoption_strategy": "Ignore. The fork's contribution is a thin Crawl4AI wrapper plus anti-bot bypasses on top of a cloning pipeline the architect has already excluded; its generation and validation are weaker than OpenThorn's and structurally incompatible with a typed SiteDefinition. The only things worth keeping are two small generalizable patterns (error-class retry policy, execution-provider interface), which we can write from scratch in an afternoon. If crawling is ever needed for FactRegistry ingestion, evaluate upstream Crawl4AI directly (Tier-1 elsewhere), not this wrapper.",
+  "recommendation": "Ignore",
+  "novelty_score": 2,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": ["research", "agent_orchestration", "qa_gate"],
+  "evidence": [
+    "CHANGES.md (full list of fork changes; search stub; brand extraction degraded; four Cloudflare bypass layers)",
+    "crawl4ai-service/main.py (/scrape, /screenshot, _build_configs, commented CapSolver block)",
+    "app/api/scrape-url-enhanced/route.ts (parallel scrape+screenshot, sanitizeQuotes)",
+    "app/api/generate-ai-code-stream/route.ts (system prompt l.442-516 and l.631-1000; selectFilesForEdit; <file> tag instructions; global.conversationState)",
+    "app/api/apply-ai-code-stream/route.ts (parseAIResponse regexes for <file>/<package>/<command>; providerInstance.writeFile)",
+    "lib/build-validator.ts (validateBuild string checks, extractMissingPackages, classifyError, calculateRetryDelay)",
+    "lib/edit-intent-analyzer.ts (regex pattern table -> EditType + fileResolver), lib/context-selector.ts, lib/file-parser.ts",
+    "types/file-manifest.ts (FileInfo, ComponentTree, FileManifest, EditType, EditIntent), lib/sandbox/types.ts (SandboxProvider abstract class), lib/sandbox/factory.ts",
+    "lib/morph-fast-apply.ts (normalizeProjectPath, <edit> block apply), app/generation/page.tsx fetch chain (l.622-3153)",
+    "package.json (ai, @ai-sdk/*, @e2b/code-interpreter, @vercel/sandbox), README.md, committed .omc/ state and __pycache__"
+  ]
+}

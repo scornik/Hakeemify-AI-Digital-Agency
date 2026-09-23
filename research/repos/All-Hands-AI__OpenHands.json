@@ -1,0 +1,75 @@
+{
+  "repo": "All-Hands-AI/OpenHands",
+  "url": "https://github.com/All-Hands-AI/OpenHands",
+  "category": "agents",
+  "license": "MIT",
+  "stars": 88924,
+  "last_push": "2026-09-23",
+  "status_note": "active; redirects to OpenHands/OpenHands. IMPORTANT: the OpenHands/OpenHands repo is now 'Agent Canvas' (a TypeScript/React/Electron control center, package @openhands/agent-canvas 1.22.0). The Python agent core (event stream, controller, runtime, microagents) was moved to OpenHands/software-agent-sdk (MIT, ~1.2k stars, pushed 2026-09-23). Legacy V0 Python monolith still readable at tags <= 0.59.0 (openhands/controller/agent_controller.py, stuck.py, openhands/microagent/). This analysis covers the V1 SDK (the live architecture) plus V0 where it differs.",
+  "core_problem": "Run an LLM coding agent that edits files and runs commands in a sandbox, safely and resumably: an append-only event log as the single source of truth, hard iteration and dollar budgets, loop detection, and a risk-gated confirmation policy for dangerous actions.",
+  "architecture": "V1 is a uv workspace of four packages: openhands-sdk (core), openhands-tools (terminal, file_editor, browser_use, delegate, task_tracker, workflow), openhands-workspace (Docker/Apptainer/Cloud/RemoteAPI sandboxes) and openhands-agent-server (FastAPI + websocket; conversation_router, event_router, hooks, docker_runtime provisioning/proxy). Data model: openhands/sdk/event/base.py `Event` is a frozen pydantic DiscriminatedUnion with id, timestamp, source and parent_id (events form a tree; sibling branches = alternate histories; `EventLog.path_to_root` and `ConversationState.active_branch()` resolve the live path). Subtypes: ActionEvent/ObservationEvent/MessageEvent/SystemPromptEvent (LLMConvertibleEvent.to_llm_message projects the log into chat messages, merging multi-tool-call batches by llm_response_id), CondensationSummaryEvent, ConversationStateUpdateEvent, AgentErrorEvent, HookExecutionEvent. Persistence (conversation/event_store.py + persistence_const.py): one JSON file per event `events/event-{idx:05d}-{uuid}.json` plus `base_state.json`; EventLog is process-safe via a lock file and a length-marker sidecar; ConversationState auto-persists base_state on every public field change (`__setattr__` hook) and exposes a context manager to batch saves. State machine: `ConversationExecutionStatus` IDLE/RUNNING/PAUSED/WAITING_FOR_CONFIRMATION/FINISHED/ERROR/STUCK (is_terminal()). Run loop (conversation/impl/local_conversation.py `run()`, ~3k lines): per iteration it checks pause/stuck, invokes agent.step(), runs stop hooks on FINISHED, emits MaxBudgetReached when `max_budget_per_run` (USD, from ConversationStats) is hit and an ERROR event when `max_iteration_per_run` (default 500) is hit. StuckDetector (conversation/stuck_detector.py) scans the last 20 events since the last user message for five patterns: identical action/observation repeats, identical action/error repeats, agent monologue, alternating A-B-A-B patterns, context-window-error loops, with `StuckDetectionThresholds` per pattern; on an action-error streak it first injects a nudge message once, then flips status to STUCK. Confirmation: security/confirmation_policy.py NeverConfirm/AlwaysConfirm/ConfirmRisky(threshold) over SecurityRisk LOW/MEDIUM/HIGH/UNKNOWN; risk is predicted per action by a SecurityAnalyzer (llm_analyzer, grayswan, toolshield, defense_in_depth shell AST policy rails) and gates the loop into WAITING_FOR_CONFIRMATION. Context: context/condenser/* (RollingCondenser, LLMSummarizingCondenser, PipelineCondenser) shrink the View; context/view/properties/* assert invariants (tool_call_matching, batch_atomicity). Critic: critic/base.py CriticBase returns CriticResult(score 0..1) and IterativeRefinementConfig(success_threshold) retries the task with a follow-up prompt. Skills (the successor of microagents, skills/skill.py + trigger.py): markdown with frontmatter loaded as Skill(name, content, trigger) where trigger is KeywordTrigger (whole-token, case-insensitive match against user message), TaskTrigger (slash-command style with inputs) or PathTrigger (gitignore-style globs fired when the agent touches matching files); untriggered skills are always injected. Workspace (workspace/base.py) abstracts execute_command/file_upload/file_download/git_changes/git_diff; DockerWorkspace boots an agent-server image and talks to it over HTTP. There is a TypeScript client (clients/typescript, alpha, remote conversations only) mirroring the server API. Structured final outputs are not first-class: the agent ends via FinishAction(message) or task_outcome presets; there is no response_format/Zod-style schema-validated final result.",
+  "core_innovation": "A frozen, tree-shaped, file-per-event log is the whole agent state; run status, stuck detection, dollar/iteration budgets and risk-gated confirmation are all pure functions over that log, so any run is replayable and resumable from disk.",
+  "strengths": [
+    "Event log as single source of truth with deterministic replay (events_to_messages is a read-only projection); base_state.json is a derived snapshot, not the truth.",
+    "StuckDetector is concrete and cheap: five explicit loop signatures over the last N events with tunable thresholds, plus a 'nudge first, then STUCK' escalation that avoids premature kills.",
+    "Two independent hard limits: max_iteration_per_run (step count) and max_budget_per_run (USD from LLM metrics) both terminate with a typed error event, never silently.",
+    "Confirmation is a policy object over a risk enum (ConfirmRisky threshold), decoupled from the UI and from the analyzer that predicts risk.",
+    "Workspace abstraction cleanly separates 'where commands run' (local/docker/remote/cloud) from the agent loop; the agent-server exposes the same API in every case.",
+    "Skills/microagents: knowledge injected only when a whole-token keyword or a file-path glob fires, with version and description in frontmatter and scripts/references/assets side-folders."
+  ],
+  "weaknesses": [
+    "Python runtime. Adopting the SDK means a second runtime next to Astro/TS; the TypeScript client is alpha and only drives a remote Python agent-server, so it does not remove the Python dependency.",
+    "Built for open-ended coding tasks (500-iteration default, free-form tool use, shell); our pipeline is ~12 deterministic stages with 3-4 constrained model calls, so 90% of the machinery (terminal, file editor, browser tools, condensers, critics, MCP, plugin marketplace) is dead weight.",
+    "No schema-validated structured output: the only 'result' is a FinishAction message; you would build the Zod/pydantic validation + retry loop yourself anyway.",
+    "Heavy churn: the repo was rebranded (OpenDevin -> OpenHands -> Agent Canvas), the Python core moved repos, V0 tags are frozen; APIs in the SDK are still shifting (deprecation module, legacy skill converters).",
+    "local_conversation.py is 3,128 lines with sync and async run loops duplicated; the state machine is spread across the loop rather than being a declarative transition table.",
+    "Critic score 0..1 with iterative refinement is exactly the non-reproducible LLM-judge-as-gate pattern we rejected."
+  ],
+  "patterns_to_steal": [
+    "Append-only event log with parent_id tree + derived base_state snapshot -> agent_orchestration: persist every pipeline stage transition (StageStarted/StageCompleted/ModelCallRequested/ModelCallReturned/GateFailed) as one JSON row per event in Postgres; the Decision Manifest is then a projection over the log, not a separately maintained document.",
+    "ConversationExecutionStatus enum with is_terminal() + explicit FINISHED/ERROR/STUCK/WAITING_FOR_CONFIRMATION -> agent_orchestration: use the same set for a build run's status column so the QA gate and human review map to WAITING_FOR_CONFIRMATION, not ad hoc flags.",
+    "Dual hard limits (iteration count AND accumulated USD from per-call metrics, each emitting a typed limit-reached event) -> agent_orchestration: every model call records cost; the run aborts with MaxBudgetReached before the copy-generation stage can loop.",
+    "StuckDetector's 'identical action/observation repeated k times' and 'nudge once then stop' -> anti_slop / assembly: when beat selection or arrangement selection re-proposes the same rejected id twice, inject the rejection reason once, then fail the stage to fallback archetype (service_clarity) instead of retrying forever.",
+    "PathTrigger/KeywordTrigger skills (whole-token keyword match, gitignore globs, frontmatter version) -> niche playbooks: a playbook file gets `triggers:` (niche keywords) and `paths:` (which section families/archetypes it applies to) in YAML frontmatter, and is injected into the creative-direction prompt only when it fires; keep playbooks versioned and human-reviewed exactly as they do with skills.",
+    "ConfirmRisky(threshold) policy over a small risk enum -> qa_gate: tag each auto-fix the fixer proposes with LOW/MEDIUM/HIGH (e.g. alt-text edit vs. removing a section) and only pause for human confirmation above the threshold."
+  ],
+  "patterns_to_avoid": [
+    "Adopting openhands-sdk or agent-server as the orchestrator -> forces a Python service and Docker agent-server for a pipeline that is mostly TypeScript code with a handful of model calls; the TS client cannot run an agent locally.",
+    "CriticBase score-threshold iterative refinement -> this is an LLM judge as a gate (rejected); our gates are Playwright/axe/Lighthouse/regex, LLM judging is warning-only.",
+    "LLMSummarizingCondenser / long-horizon memory -> our model calls are short and stateless-by-design (eligible sets are passed in); there is no long conversation to condense.",
+    "Free-form tool loop (terminal/file_editor/browser tools) for site building -> the model must select from eligible ids, never write files or run commands; a sandboxed shell for the model contradicts 'constraint not generation'.",
+    "Skills marketplace / plugin fetch from GitHub at runtime -> playbooks must be versioned in-repo and human-reviewed; no runtime fetch of behaviour."
+  ],
+  "reusable_patterns": [
+    "EventSourcedRunState: every state change is an immutable, typed, parent-linked event; current state and rationale are projections over the log.",
+    "DualBudgetGuard: a run is bounded by both a step counter and an accumulated-cost counter, each terminating with a typed event.",
+    "LoopSignatureDetector: a fixed window of recent events is scanned for k-fold identical (action, observation) or A-B-A-B signatures; first hit injects a nudge, second hit terminates.",
+    "TriggeredKnowledgeInjection: knowledge files declare keyword and path triggers in frontmatter and are added to the prompt only when a trigger fires.",
+    "RiskThresholdConfirmation: actions carry a predicted risk level; a policy object decides whether to pause for a human based on a threshold, independent of UI.",
+    "WorkspaceBoundary: the agent loop talks to a small execute/upload/download/git interface; local, Docker and remote implementations are interchangeable."
+  ],
+  "adoption_strategy": "Adapt. Do not run the Python SDK; re-implement four small mechanisms in TypeScript: (1) an append-only `run_events` table (id, run_id, parent_id, type, payload jsonb, cost) with a Zod discriminated union of event types, (2) a run status enum copied verbatim (IDLE/RUNNING/PAUSED/WAITING_FOR_CONFIRMATION/FINISHED/ERROR/STUCK), (3) a budget guard that reads accumulated cost from the log and aborts, (4) a repeat-selection detector for the three constrained model calls. Copy the skills trigger semantics (whole-token keywords + path globs in frontmatter) into the niche-playbook loader. Answer to 'is a full agent framework warranted?': no. Our pipeline is a linear DAG with three or four bounded model calls; OpenHands' value is in the 20% of it that is a durable log + limits, which is ~400 lines of TS, and the other 80% (shell, editor, browser, condensers, critic, MCP) is for open-ended coding agents we do not want.",
+  "recommendation": "Adapt",
+  "novelty_score": 6,
+  "difficulty_score": 4,
+  "pipeline_stages_affected": [
+    "agent_orchestration",
+    "qa_gate",
+    "anti_slop",
+    "research",
+    "telemetry"
+  ],
+  "evidence": [
+    "OpenHands/OpenHands README.md + package.json (@openhands/agent-canvas 1.22.0, React Router/Vite/Electron; no openhands/ Python dir on main)",
+    "OpenHands/OpenHands tag 0.59.0: openhands/controller/agent_controller.py (max_iterations, max_budget_per_task, confirmation_mode, delegate), openhands/controller/stuck.py, openhands/microagent/types.py (MicroagentMetadata.triggers)",
+    "software-agent-sdk openhands-sdk/openhands/sdk/event/base.py (Event frozen pydantic, parent_id tree, events_to_messages projection)",
+    "software-agent-sdk openhands-sdk/openhands/sdk/conversation/state.py (ConversationExecutionStatus, max_iterations, stuck_detection, confirmation_policy, autosave __setattr__, active_branch)",
+    "software-agent-sdk openhands-sdk/openhands/sdk/conversation/event_store.py + persistence_const.py (event-{idx:05d}-{id}.json, base_state.json, lock file, length marker)",
+    "software-agent-sdk openhands-sdk/openhands/sdk/conversation/stuck_detector.py + conversation/types.py StuckDetectionThresholds",
+    "software-agent-sdk openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py run() loop (max_iteration_per_run=500, max_budget_per_run, _budget_exceeded_detail, MaxBudgetReached)",
+    "software-agent-sdk openhands-sdk/openhands/sdk/security/confirmation_policy.py + security/risk.py",
+    "software-agent-sdk openhands-sdk/openhands/sdk/skills/skill.py + skills/trigger.py (KeywordTrigger/TaskTrigger/PathTrigger, whole-token match, SKILL.md frontmatter)",
+    "software-agent-sdk openhands-sdk/openhands/sdk/context/condenser/base.py, critic/base.py, critic/result.py, workspace/base.py, tool/builtins/finish.py, openhands-tools/openhands/tools/workflow/definition.py",
+    "software-agent-sdk clients/typescript/README.md (alpha, remote conversations only)"
+  ]
+}

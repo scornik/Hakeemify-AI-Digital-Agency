@@ -1,0 +1,69 @@
+{
+  "repo": "browser-use/browser-use",
+  "url": "https://github.com/browser-use/browser-use",
+  "category": "browser-qa",
+  "license": "MIT",
+  "stars": 116001,
+  "last_push": "2026-09-18",
+  "status_note": "active; v0.13.10; Python >=3.11; talks to Chromium directly over CDP via the in-house cdp-use client (Playwright dependency removed); commercial cloud (browser-use.com) funds it and the codebase carries cloud/telemetry hooks (posthog, browser_use/sync, browser_use/cloud_events)",
+  "core_problem": "Let an LLM complete open-ended tasks in a real browser by repeatedly serializing the page into a compact indexed list of interactive elements, asking the model for a structured batch of actions, executing them, and looping until a `done` action.",
+  "architecture": "Python package browser_use/. browser/ owns a CDP session (cdp-use==1.4.5) with watchdogs (popups, downloads, crashes). dom/service.py (DomService.get_dom_tree) issues DOMSnapshot.captureSnapshot (with REQUIRED_COMPUTED_STYLES), DOM.getDocument and Accessibility.getFullAXTree per frame, merges them into EnhancedDOMTreeNode (dom/views.py: bounds, computed styles, ax_node, has_js_click_listener, frame_id, backend_node_id) with iframe offset translation, max_iframes/max_iframe_depth limits and optional cross-origin iframe recursion. dom/serializer/serializer.py (DOMTreeSerializer.serialize_accessible_elements) runs: _create_simplified_tree (ClickableElementDetector.is_interactive heuristics in clickable_elements.py: js click listeners, tag/role/aria props, label/span wrappers of form controls, search-class heuristics), PaintOrderRemover (drops nodes covered by later paint), _optimize_tree, _apply_bounding_box_filtering (99% containment threshold collapses children of a/button/combobox), then _assign_interactive_indices_and_mark_new_nodes producing a selector_map {index -> node} and a text tree where interactive nodes render as `[12]<button ...>` with a `*` prefix when new since the last step; SVG collapsed, |SHADOW(open)|, |scroll element|, |IFRAME| markers, compound_components for sliders/selects. agent/service.py Agent.run/step builds messages via agent/prompts.py (AgentMessagePrompt with <browser_state>: url, tabs, stats, elements text, page_info, pending network requests) plus a screenshot (use_vision True|False|'auto'; auto exposes a `screenshot` tool the model calls on demand; llm_screenshot_size resize). The LLM must return AgentOutput (agent/views.py: thinking, evaluation_previous_goal, memory, next_goal, current_plan_item, plan_update, action: list[ActionModel]); ActionModel is a pydantic model synthesized at runtime by tools/registry/service.py create_action_model() from decorated functions in tools/service.py (search, navigate, go_back, wait, input, upload_file, switch, close, extract, search_page, find_elements, scroll, send_keys, find_text, screenshot, save_as_pdf, dropdown_options, select_dropdown, write_file, replace_file, read_file, evaluate, done, click), with domain filters and sensitive_data placeholder substitution. Flash mode strips thinking fields. ActionLoopDetector/PageFingerprint (url + element_count + sha256 of dom text) inject soft 'you are looping' hints. agent/judge.py runs an LLM judge over the trace + up to 10 screenshots. AgentHistoryList persists every step (DOMInteractedElement with element_hash, xpath, ax_name); Agent.rerun_history replays saved actions with _update_action_indices cascading matches EXACT hash -> STABLE hash (dynamic classes stripped) -> XPATH -> AX_NAME -> ATTRIBUTE, optionally re-running an LLM for extract steps. browser_use/mcp/server.py exposes browser_navigate/click/type/get_state/extract_content/get_html/screenshot/scroll/go_back/list_tabs as MCP tools. 37 runtime deps including every LLM SDK.",
+  "core_innovation": "A CDP-level DOM+AX+paint-order fusion that yields a numbered, diff-marked clickable-element index small enough for an LLM to act on without vision, plus runtime-synthesized pydantic action schemas that constrain the model's output.",
+  "strengths": [
+    "The serializer is the best-documented example of turning a live page into an LLM-sized, index-addressable state: paint-order occlusion removal, bbox containment collapse, `*` new-element markers, scroll and shadow/iframe markers, compound-component summaries.",
+    "Structured output contract: AgentOutput/ActionModel are pydantic schemas built from the tool registry, so the model can only emit registered actions with typed params; action registration is a decorator with domain allowlists.",
+    "Replay with cascading element matching (hash -> stable hash -> xpath -> ax name -> attribute) is a serious attempt at deterministic re-execution of an LLM-discovered path.",
+    "PageFingerprint + ActionLoopDetector are cheap, model-free stagnation detectors.",
+    "use_vision='auto' makes screenshots an on-demand tool rather than a per-step cost.",
+    "MCP server and judge module make it easy to bolt an 'act like a user, report friction' pass onto any site.",
+    "MIT, extremely active (116k stars, pushes weekly)."
+  ],
+  "weaknesses": [
+    "Python 3.11+ runtime with 37 dependencies including openai/anthropic/google-genai/groq/ollama SDKs, posthog telemetry and pyobjc; embedding in an Astro/TS pipeline means a sidecar process and a second toolchain.",
+    "Every step is an inference call over a full page serialization (often 5-20k tokens) plus optional screenshot; a 15-step 'book an appointment' run costs dollars and minutes, and the loop is non-deterministic across runs and models.",
+    "Clickability is heuristic (class-name search indicators like 'magnify', 'glass'; label/span wrapper rules) and tuned for arbitrary third-party sites; on our own generated markup we already know the interactive elements from the SiteDefinition.",
+    "Replay is best-effort: rerun_history has skip_failures, max_retries and re-invokes an LLM for extract steps, so it is not a deterministic gate.",
+    "The judge (agent/judge.py) is an LLM scoring a trace with screenshots, exactly the non-reproducible 'design critic' pattern we rejected.",
+    "Rapid API churn (0.x versions; Playwright removed in favour of cdp-use; flash_mode, judge, variable detection added recently); pinning is mandatory and upgrades are breaking.",
+    "Bypasses Playwright entirely, so none of its artifacts (trace.zip, reporter JSON, snapshots) integrate with the gate's evidence model."
+  ],
+  "patterns_to_steal": [
+    "Indexed interactive-element serialization with new-element markers → agent_orchestration (optional explorer pass): if we ever run an LLM friction pass on a generated site, serialize from the SiteDefinition + Playwright ARIA snapshot in the same shape (`[n]<role name>` with `*` for changed nodes) rather than shipping raw DOM.",
+    "Runtime-synthesized action schema from a registry (create_action_model) → agent_orchestration: build the Zod schema for any model-facing selection step from the eligible set at runtime (eligible design_system_ids, arrangement ids) so the model cannot name an option code did not permit.",
+    "PageFingerprint (url + element count + text hash) → qa_gate: fingerprint each generated page's DOM text to detect 'identical section across pages' and to dedupe crawl results in the research stage.",
+    "Cascading element re-identification (exact hash -> stable hash -> xpath -> accessible name) → qa_gate replay: when a human-authored friction script must survive regeneration, resolve targets by data-slot/aria name first, xpath last.",
+    "Domain-scoped actions and sensitive_data placeholders → research: any crawler-side action registry should carry allowed_domains so a fact-ingestion agent physically cannot navigate outside the target list."
+  ],
+  "patterns_to_avoid": [
+    "LLM judge over screenshots as pass/fail (agent/judge.py) → non-reproducible score; we already rejected design-critic gating. At most a warning-only tier-2 note.",
+    "Per-step full-page inference loop as a gate → cost, latency and non-determinism violate 'deterministic gate'; the gate is Playwright assertions, the agent loop is optional exploration.",
+    "Adopting the Python runtime as a pipeline dependency → second toolchain, telemetry hooks (posthog), heavy dep tree; if an explorer pass is wanted, Playwright MCP or Stagehand tool-calling in TS covers it.",
+    "Heuristic clickable detection on our own output → we own the markup; interactive elements are declared in SiteDefinition and verifiable via ARIA roles, no guessing needed."
+  ],
+  "reusable_patterns": [
+    "IndexedElementState: page state for a model is a numbered list of interactive nodes with role, name, bounds-derived visibility and a changed-since-last-step marker.",
+    "RegistrySynthesizedSchema: the output schema handed to a model is generated at call time from the currently permitted action/option set.",
+    "PaintOrderOcclusionFilter: drop DOM nodes fully covered by later-painted nodes before serialization.",
+    "CascadingElementReidentification: replay resolves an element via a strict-to-loose ladder of identity keys.",
+    "SoftLoopDetector: hash actions and page fingerprints in a rolling window; inject a hint rather than blocking."
+  ],
+  "adoption_strategy": "Ignore for the gate; optionally Adapt one idea. Do not add browser-use to the pipeline: it is a Python, LLM-per-step, non-deterministic agent whose judge is the rejected critic pattern, and its accessibility/DOM work duplicates what Playwright's ARIA snapshot and our own SiteDefinition already give us. If an 'act like a user, book an appointment, report friction' pass is wanted, run it in TypeScript with Playwright MCP or Stagehand tool-calling as a warning-only Gap Report input. The one mechanism worth re-implementing in Zod is registry-synthesized output schemas for model selection steps.",
+  "recommendation": "Ignore",
+  "novelty_score": 6,
+  "difficulty_score": 7,
+  "pipeline_stages_affected": ["agent_orchestration", "qa_gate", "research"],
+  "evidence": [
+    "browser_use/dom/serializer/serializer.py (DOMTreeSerializer: PROPAGATING_ELEMENTS, DEFAULT_CONTAINMENT_THRESHOLD 0.99, serialize_accessible_elements steps, serialize_tree output format with [index], * new prefix, |SHADOW|, |scroll element|, |IFRAME|, compound_components)",
+    "browser_use/dom/serializer/clickable_elements.py (ClickableElementDetector.is_interactive heuristics incl. has_js_click_listener, search_indicators, label/span form-control wrappers, ax properties focusable/editable/settable)",
+    "browser_use/dom/serializer/paint_order.py, browser_use/dom/service.py (DOMSnapshot.captureSnapshot with REQUIRED_COMPUTED_STYLES, DOM.getDocument, Accessibility.getFullAXTree per frame, iframe scroll offsets, max_iframes/max_iframe_depth, cross_origin_iframes)",
+    "browser_use/agent/views.py (AgentOutput fields, type_with_custom_actions / flash_mode variants, PageFingerprint, ActionLoopDetector, AgentHistoryList)",
+    "browser_use/tools/registry/service.py (Registry.action decorator with domains/allowed_domains, create_action_model via pydantic create_model, _replace_sensitive_data)",
+    "browser_use/tools/service.py (registered tools list: search, navigate, click, input, extract, scroll, evaluate, done, screenshot, etc.)",
+    "browser_use/agent/service.py (Agent.__init__ use_vision bool|'auto', llm_screenshot_size, flash_mode, use_judge/judge_llm, max_failures, step_timeout; rerun_history; _update_action_indices cascade EXACT/STABLE/XPATH/AX_NAME/ATTRIBUTE)",
+    "browser_use/agent/judge.py (construct_judge_messages with up to 10 screenshots)",
+    "browser_use/agent/prompts.py (<browser_state> assembly, pending_network_requests, page stats)",
+    "browser_use/mcp/server.py (browser_* MCP tools)",
+    "pyproject.toml (version 0.13.10, requires-python >=3.11, cdp-use==1.4.5, 37 deps, posthog)",
+    "raw/browser-use_browser-use/meta.json, languages.json (Python 3.6 MB)"
+  ]
+}

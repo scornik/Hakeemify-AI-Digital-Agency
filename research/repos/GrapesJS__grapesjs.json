@@ -1,0 +1,84 @@
+{
+  "repo": "GrapesJS/grapesjs",
+  "url": "https://github.com/GrapesJS/grapesjs",
+  "category": "visual-editors",
+  "license": "BSD-3-Clause (packages/core/LICENSE; the root LICENSE file only contains the path './packages/core/LICENSE', which is why GitHub reports NOASSERTION). Permissive, non-copyleft; only restriction is no endorsement using the GrapesJS name.",
+  "stars": 26262,
+  "last_push": "2026-09-21",
+  "status_note": "active - v0.23.6 (2026-08-26), 58 commits since 2026-03, but effectively a one-person project: artf has 5462 contributions vs the next human contributor ~70. pnpm monorepo: packages/core (the library), packages/cli, docs.",
+  "core_problem": "A framework-agnostic, embeddable HTML/CSS web-builder runtime: an iframe canvas where a Backbone model tree of DOM-like 'Components' plus a separate CSS-rule model is edited via drag/drop, traits and a style manager, then exported back to HTML+CSS or a JSON project.",
+  "architecture": "Backbone 1.4 + underscore runtime (packages/core/src). editor/model/Editor.ts instantiates a fixed module list (`deps`) and a `storableDeps` list [DataSourceManager, AssetManager, CssComposer, PageManager, ComponentManager, SelectorManager]; `storeData()` merges each module's `store()` slice keyed by `storageKey` ('pages','styles','assets','dataSources',...) into ProjectData and `loadData()` clears and reloads each slice in order. ProjectData is typed `{[key:string]: any}` (storage_manager/model/IStorage.ts) - there is no schema. The document is Pages -> Frames -> a root 'wrapper' Component -> recursive `components`. Component (dom_components/model/Component.ts, 2262 lines) is a Backbone Model whose defaults are DOM-ish (tagName, type, attributes, content, style, classes, script) plus ~20 editor-permission flags (draggable, droppable, stylable, editable, removable, copyable, locked, unstylable[], propagate[], delegate{}) and undo flags (`_undo`, `_undoexc`); `toJSON()` strips runtime keys (toolbar, traits, status, open) and optionally only-changed props (`avoidDefaults`). `ComponentDefinition` is open-ended (`[key:string]: unknown`). New types are registered with `Components.addType(id, {model, view, isComponent, isParsedNode, extend, extendView, extendFn})`, which builds a prototype-extension stack; ParserHtml runs each type's `isComponent(node)` recogniser to reverse-parse arbitrary HTML into typed components. Styles are NOT on the component: CssComposer holds CssRule {selectors, style, mediaText, state, atRuleType}; `component.setStyle()` writes an `#id` rule (or inline when configured). Canvas: canvas/view/FrameView.ts renders one `<iframe>` per Frame; `renderBody()` injects editor CSS and each ComponentView mounts DOM with `$el.data('model', model)` and `el.__gjsv = view` (utils/mixins getModel/getViewEl) - the DOM->model map is a per-element pointer, not an id lookup. Inline text: ComponentTextView toggles a pluggable RTE on the element and on blur reparses innerHTML back into child components ('sync:content'). Undo: undo_manager/index.ts wraps backbone-undo, registers models/collections, custom undo types for change/add/remove/reset; `_undo` (boolean or list of attribute keys) and `_undoexc` decide which attribute changes are recorded. Traits (trait_manager/types.ts: type, name, label, changeProp, getValue/setValue, min, max, unit, options) are per-component property editors. StyleManager = Sectors -> Property models (Number/Select/Radio/Slider/Composite/Stack) with `buildProps`. Blocks = {label, media, content: html | ComponentDefinition, category}. Symbols (dom_components/model/SymbolUtils.ts) link a main component to instances with change propagation and per-instance overrides. DataSources (added 2025-26) contribute `data-variable`, `data-condition`, `data-collection` component types that resolve paths into DataRecords with `transformers`; the 'dataSources' slice loads before the others. Plugins are `(editor, opts) => void` functions resolved by id in PluginManager with config from `pluginsOpts`. Export: `component.toHTML({withProps})` emits `data-gjs-*` attributes so HTML can be re-imported.",
+  "core_innovation": "A DOM-shaped Backbone component tree with a real CSS-rule model, rendered live in an iframe, plus a recogniser stack (`isComponent`) that lets arbitrary HTML round-trip back into typed components.",
+  "strengths": [
+    "Complete, battle-tested editor runtime: pages/frames, layers, selectors/states/media queries, RTE, device previews, keymaps, i18n, storage, undo - all as swappable modules on one EditorModel.",
+    "Per-component permission flags (draggable/droppable/stylable/editable/locked/unstylable[]/propagate[]) are a real constraint vocabulary for locking an editor down.",
+    "Symbols (main/instance with propagation + overrides) solve shared header/footer editing correctly.",
+    "DataSources with data-variable / data-condition / data-collection components give declarative data binding that keeps a reference to source id and path.",
+    "Traits and Style-manager Properties are declarative UI descriptors rendered generically, not bespoke forms.",
+    "128 test files under packages/core/test; docs/modules/*.md document each subsystem; BSD-3 is permissive."
+  ],
+  "weaknesses": [
+    "ProjectData is untyped `Record<string, any>` and ComponentDefinition is open-ended: there is no contract, so validation must be bolted on outside the editor.",
+    "The document is a DOM with metadata (tagName/attributes/style), not a semantic section tree; there is no place for `requires`, `design_compat`, `arrangement`, `intensity` except untyped custom props the editor ignores.",
+    "Defaults are all-permissive (every component draggable, droppable, stylable) and the Style Manager writes arbitrary CSS rules - the opposite of 'model selects a design_system_id, never emits a token'. Locking it down means fighting every default.",
+    "Backbone/underscore/cash runtime, a 2.2k-line Component god-class, prototype-extension `addType` stack; heavy bundle, not tree-shakeable, no TypeScript generics for component props.",
+    "The editor's own DOM render is the editing surface. Server-rendered Astro output can only enter via ParserHtml reverse-parsing, which makes the HTML the source of truth and SiteDefinition a derived artifact (double source of truth, lossy).",
+    "Bus factor 1 (single maintainer), 0.x versioning since 2017."
+  ],
+  "patterns_to_steal": [
+    "Storable module slices (`storageKey` + `store()`/`load()` composed into one project doc, dataSources loaded first) -> SiteDefinition as named Zod sub-documents (site, pages, assets, facts) each with its own load order and migration.",
+    "Per-component permission flags with `propagate[]` inheritance and `unstylable[]` allow-lists -> per-section-variant and per-field `editable` / `locked` / `allowed_ops` metadata in the Zod schema so the post-V1 editor is constrained by the same contract the generator obeys.",
+    "`_undo` / `_undoexc` attribute-level undo eligibility -> declare which SiteDefinition fields are undoable vs ephemeral (selection, ui state) in the schema, not in editor code.",
+    "`toHTML({withProps})` emitting `data-gjs-*` attributes + `isComponent` recogniser -> the Astro renderer emits `data-sd-path` (JSON pointer into SiteDefinition) and `data-sd-variant` on every section/field root so an overlay editor maps DOM -> data node by attribute, never by re-parsing HTML.",
+    "DataSources data-variable {path, defaultValue} + record `transformers` -> FactRegistry binding: a section field holds a fact reference; the renderer resolves it and keeps provenance/quotable flags for the QA gate.",
+    "Symbols main/instance with override map -> shared blocks (header/footer/CTA) referenced by id in SiteDefinition with per-page overrides.",
+    "Trait descriptors (type/label/min/max/options/changeProp) -> derive editor property panels from Zod field metadata instead of hand-written forms."
+  ],
+  "patterns_to_avoid": [
+    "DOM-as-document (tagName/attributes/style on every node) -> our unit is a section variant with typed fields; exposing tagName/classes to an editor destroys the arrangement genome and lets humans generate slop.",
+    "Free-form Style Manager writing CSS rules -> violates 'design system = token files, model/human selects an id'. Any editor over our stack must only offer enumerated variants/arrangements, never CSS properties.",
+    "Embedding the GrapesJS runtime and reverse-parsing Astro HTML via ParserHtml -> two sources of truth and a Backbone+iframe render pipeline that duplicates the Astro renderer.",
+    "Prototype-extension `addType` with `extendFn` method chaining -> untyped and order-dependent; use discriminated Zod unions per section family instead.",
+    "Untyped ProjectData `Record<string, any>` -> never let the editor persist anything that is not the Zod SiteDefinition."
+  ],
+  "reusable_patterns": [
+    "StorableSlices: a project document assembled from independently loadable/serialisable module slices with a declared load order.",
+    "PermissionFlagsWithPropagation: node-level capability flags (draggable/droppable/stylable/locked) that children inherit via an explicit propagate list.",
+    "AttributeAnnotatedRoundTrip: emit machine-readable data-* attributes on rendered HTML so a recogniser can map DOM back to typed nodes.",
+    "UndoEligibilityOnModel: undo participation declared per attribute on the data model (_undo / _undoexc) rather than per action in the editor.",
+    "SymbolInstancePropagation: a main node whose instances receive changes unless a per-instance override map says otherwise.",
+    "DeclarativeTraitDescriptors: property editors described as data (type/options/min/max) and rendered generically."
+  ],
+  "adoption_strategy": "Adapt - do not embed GrapesJS. Its document is a DOM-with-metadata and its defaults make everything draggable and stylable, which fights a typed Zod SiteDefinition made of enumerated section variants; the integration would be spent locking every flag and would still end with an untyped ProjectData. Take five mechanisms instead: storable slices for the SiteDefinition sub-documents, permission flags + propagate as Zod field metadata, attribute-annotated HTML (`data-sd-path`) emitted by the Astro renderer so a post-V1 overlay editor can map DOM to data node, data-variable style fact binding for the FactRegistry, and symbol/instance for shared blocks. Undo should be a patch log over SiteDefinition (see craft.js), not Backbone model tracking.",
+  "recommendation": "Adapt",
+  "novelty_score": 5,
+  "difficulty_score": 8,
+  "pipeline_stages_affected": [
+    "visual_editor",
+    "renderer",
+    "fact_registry",
+    "cms",
+    "design_system"
+  ],
+  "evidence": [
+    "packages/core/LICENSE (BSD-3-Clause text); root LICENSE only contains './packages/core/LICENSE'",
+    "packages/core/package.json: grapesjs 0.23.6, license BSD-3-Clause, deps backbone 1.4.1, backbone-undo 0.2.6, underscore, codemirror",
+    "packages/core/src/storage_manager/model/IStorage.ts: `export interface ProjectData { [key: string]: any }`",
+    "packages/core/src/editor/model/Editor.ts: `deps` and `storableDeps` arrays; storeData()/loadData() merging module.store()/load()",
+    "packages/core/src/dom_components/model/Component.ts: `get defaults()` (~40 keys incl. _undo/_undoexc/propagate/delegate), toJSON(), getId()/ccid, createId(), toHTML({withProps}) emitting data-gjs-*",
+    "packages/core/src/dom_components/model/types.ts: ComponentProperties, ComponentDefinition ([key:string]: unknown), ComponentDelegateProps, ComponentStackItem",
+    "packages/core/src/dom_components/index.ts addType(): model/view prototype extension, isComponent/isParsedNode recogniser wiring",
+    "packages/core/src/parser/model/ParserHtml.ts ~lines 262-267: per-type isParsedNode/isComponent calls during HTML import",
+    "packages/core/src/canvas/view/FrameView.ts: tagName 'iframe', getWindow/getDoc via contentWindow/contentDocument, renderBody() injecting editor CSS",
+    "packages/core/src/dom_components/view/ComponentView.ts: `$el.data('model', model)`; utils/mixins.ts getModel()/getViewEl() via el.__cashData / el.__gjsv",
+    "packages/core/src/dom_components/view/ComponentTextView.ts: RTE enable on edit, 'sync:content' listener, disableEditing() reparse",
+    "packages/core/src/undo_manager/index.ts: backbone-undo, changeUndoType('change'|'add'|'remove'|'reset'), _undo array/boolean check, changedMap before-cache",
+    "packages/core/src/css_composer/model/CssRule.ts defaults: selectors, style, mediaText, state, atRuleType",
+    "packages/core/src/trait_manager/types.ts TraitProperties; style_manager/model/Property.ts PropertyProps; style_manager/model/Sector.ts SectorProperties",
+    "packages/core/src/block_manager/model/Block.ts BlockProperties",
+    "packages/core/src/dom_components/model/SymbolUtils.ts isSymbolMain/isSymbolInstance/getSymbolMain",
+    "packages/core/src/data_sources/types.ts DataComponentTypes (data-variable, data-condition, data-collection), DataRecordProps, transformers",
+    "packages/core/src/plugin_manager/index.ts normalizePlugin/pluginsOpts",
+    "gh api releases: v0.23.6 2026-08-26; commits since 2026-03-01: 58; contributors: artf 5462, dependabot 72, xQwexx 70"
+  ]
+}

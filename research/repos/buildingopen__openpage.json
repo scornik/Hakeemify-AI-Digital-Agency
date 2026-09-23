@@ -1,0 +1,72 @@
+{
+  "repo": "buildingopen/openpage",
+  "url": "https://github.com/buildingopen/openpage",
+  "category": "ai-website-builders",
+  "license": "MIT",
+  "stars": 79,
+  "last_push": "2026-03-07",
+  "status_note": "active but early (v1.0.0, ~9k LOC, single-org, last push Mar 2026); tests cover only export-html and deploy-security",
+  "core_problem": "A self-hosted website builder where one JSON document (SiteConfig) is the source of truth that a visual editor, an AI generator and a static exporter all read and write, so AI output is structured data rather than fragile generated code.",
+  "architecture": "Vite + React 19 SPA. Contract: src/blocks/types.ts defines BlockConfig {id, type: BlockType (19-string union), variant: string, props: Record<string, unknown>}, PageConfig {id,name,path,blocks[]}, SiteConfig {name, pages?, blocks (legacy first-page mirror), theme?: Partial<ThemeConfig>} and ThemeConfig (6 bg + 4 text + accent/accentDim + 3 border hex tokens, 3 font names, 2 radii). There is NO Zod or runtime schema; props is untyped. The block catalog is declared in five parallel hand-maintained places: (1) the BlockType union, (2) src/lib/block-metadata.ts (label, category, variants[], defaultProps), (3) each block's local props interface + a switch(block.variant) inside e.g. HeroBlock.tsx that picks HeroCentered/HeroSplit/HeroGradient/HeroMinimal (default -> centered), (4) src/editor/PropertiesPanel.tsx blockFields (per-type FieldDef list driving the sidebar inputs), and (5) the LLM system prompt which lists all 19 types/variants/props as prose, duplicated in src/lib/generation-prompt.ts and api/generate.ts (already drifted: the API copy has no pages and adds a testimonials.company field). Registration: src/blocks/registry.tsx is a plain Record<string, ComponentType<{block}>> plus a per-block React error boundary and a PlaceholderBlock fallback for unknown types; RenderBlock(block) = registry[block.type] || Placeholder. Rendering: src/editor/Canvas.tsx maps active page blocks through BlockWrapper (selection, hover, move/dup/delete) and RenderBlock inside a Tailwind @container div whose inline style is themeToCSS(resolveTheme(theme)) -> --color-* CSS variables; viewport switching just changes max-width (880/768/375) and block styles use @md:/@2xl: container queries, so no iframe is needed. State: src/store/configStore.ts (Zustand + immer + persist). Undo/redo is a whole-config snapshot stack: pushUndo() deep-clones {pages, blocks, theme} via JSON.parse(JSON.stringify) with a label + timestamp, MAX_UNDO=50, redoStack cleared on every push; undo() pops and pushes the current snapshot onto redo; previewTheme() and renamePage() intentionally bypass the stack (transient hover previews); stacks are excluded from persistence (partialize) and VersionHistory.tsx just lists undoStack labels reversed; persist has a version:2 migrate that wraps legacy blocks[] into pages[]. AI flow: src/lib/generate-site.ts is a three-rung ladder: (1) client-side BYOK Gemini (gemini-3-flash-preview, responseMimeType application/json, temperature 0.8, key in localStorage), (2) POST /api/generate Vercel function with the same call server-side, (3) getTemplateForPrompt() keyword-matched hard-coded templates (portfolio/restaurant/agency/...). All AI output passes validateSiteConfig(): unknown block types are dropped, an invalid variant is coerced to variants[0], props = {...defaultProps, ...raw.props} with no shape check, theme hex values regex-validated and radii clamped, empty results fall back to a template. The AgentPanel 'JSON patch' chat is a regex demo (change headline / add X / remove X / make X variant / switch theme) with a random 800-1400 ms fake typing delay; no LLM. Export: src/lib/export-html.ts is a second, hand-written string-template renderer (1.4k lines) covering only 13 of 19 types and only config.blocks (first page); the other six types emit an HTML comment. JsonDrawer.tsx applies pasted JSON via setConfig(JSON.parse(text)) with no validation.",
+  "core_innovation": "A flat {type, variant, props} block document shared verbatim by editor, AI generator and renderer, with the AI catalogue expressed as a prose copy of the same block metadata and a coercing validator that repairs rather than rejects model output.",
+  "strengths": [
+    "The shared-contract shape is minimal and legible: BlockConfig {id,type,variant,props} + PageConfig + ThemeConfig; every mutation path (editor, AI, JSON drawer) converges on one Zustand store so the canvas re-renders from one document.",
+    "Coercing validator (validateSiteConfig/validateBlock): unknown types dropped, invalid variant -> first variant, defaultProps merged under model props, hex/radius range checks, template fallback on empty output. Cheap and keeps the canvas from ever crashing on bad AI JSON.",
+    "Three-rung generation ladder (BYOK client -> server key -> deterministic keyword template) so the product always produces a page; the template rung is instant and honest ('source: template').",
+    "Container-query canvas (@container + @md:/@2xl: block styles + inline --color-* vars) gives responsive preview and per-site theming without an iframe or a second stylesheet.",
+    "Undo/redo as labelled whole-document snapshots with transient-mutation bypass (previewTheme) is trivially correct and doubles as the version-history UI.",
+    "Per-block React error boundary in the registry isolates a broken block from the rest of the page."
+  ],
+  "weaknesses": [
+    "'Typed JSON' is nominal: props is Record<string, unknown>, no Zod/JSON Schema anywhere; the block catalogue lives in five hand-synced declarations (types.ts, block-metadata.ts, per-block props interface + variant switch, PropertiesPanel blockFields, two prompt copies) and has already drifted.",
+    "Model emits raw design tokens (20 hex colours, font names, radii) and copy in one shot at temperature 0.8; theme quality is whatever the LLM guesses. Exactly the 'model emits a token' pattern the architect rejected.",
+    "Blocks are generic 'Hero 1/2/3' presets: variants are a string switch inside the component with no requires/enhanced_by/compat metadata, no composition or asset constraints, no notion of arrangement or signature move.",
+    "Double renderer: React components for the editor and a separate 1.4k-line string-template exporter that covers only 13/19 types and only the first page, so export and canvas diverge by construction.",
+    "AgentPanel 'AI agent with JSON patches' is regex pattern matching with a fake typing delay; the README's 'JSON schema enforces validity' claim only holds on the AI path (JsonDrawer.setConfig is unvalidated).",
+    "Prompt is aspirational/one-shot ('write compelling copy', 'pick a theme that fits the vibe'); no fact grounding, no placeholder scan beyond 'do not use Lorem ipsum', no QA loop.",
+    "Tiny community (79 stars, one org), dark-theme-only editor, localStorage persistence, no tests for the store or validator."
+  ],
+  "patterns_to_steal": [
+    "Coerce-then-validate on model output (drop unknown type, snap invalid variant to a known one, merge defaults under props, clamp numeric ranges) -> our Assembly stage: run it as a pre-pass before the Zod parse of SiteDefinition so a single bad field degrades to a default instead of failing the whole build, and log every coercion into the Decision Manifest.",
+    "Deterministic fallback rung (keyword template returns a complete SiteConfig with source:'template') -> our pipeline's fail-safe: when Creative Direction or Beat selection yields no eligible variant, fall back to the service_clarity archetype deterministically and mark it in the Gap Report.",
+    "Labelled whole-document snapshot undo stack with an explicit transient bypass (previewTheme) -> post-V1 visual editor: snapshot SiteDefinition per committed edit, bypass for hover previews, expose the stack as version history.",
+    "Container-query canvas with inline CSS-variable theme injection -> visual editor / renderer preview: render Astro section HTML inside a @container root with the design system's token file injected as --vars, so viewport emulation is a max-width change and design-system swaps are a variable swap.",
+    "Registry = Record<type, component> + per-block error boundary + placeholder fallback -> renderer: resolve variant x arrangement ids to Astro components through one table, with an explicit 'unknown variant' placeholder that fails the Launch QA placeholder scan rather than crashing the build."
+  ],
+  "patterns_to_avoid": [
+    "Model-emitted theme tokens (raw hex, font names, radii in the generation prompt) -> violates 'model selects an id, never emits a token'; our design systems are authored token files.",
+    "Prose copy of the block catalogue inside the prompt, hand-synced with the TS types -> drift is already visible in this repo; our Zod schemas must be the single source and the prompt-visible catalogue must be generated from them (or use structured outputs / tool schemas).",
+    "Generic Hero/Features/CTA 'variant = string switch' blocks with no metadata -> the architect already rejected extending this schema; our section variants need requires/compat/composition/motion/a11y/priors and arrangements.",
+    "Separate string-template exporter duplicating the React renderer -> two renderers guarantee divergence; Astro components must be the only renderer for both preview and publish.",
+    "Regex 'agent' that fakes LLM latency -> misleading; if an edit agent exists it must be a real, reviewable patch with a diff, applied through the same validator.",
+    "One-shot 'write compelling copy for this business' generation -> fabricates claims; every sentence in our pages must trace to the FactRegistry."
+  ],
+  "reusable_patterns": [
+    "CoerceThenValidate: repair model JSON toward known enums/defaults before strict parsing, recording every coercion.",
+    "FallbackLadder: ordered generation strategies (BYOK -> server -> deterministic template) each returning the same contract type plus a provenance tag.",
+    "SnapshotUndoStack: labelled deep-clone snapshots of the whole document with a transient-bypass channel for preview-only mutations.",
+    "ContainerQueryCanvas: preview root as a CSS container with tokens injected as custom properties, so viewport and theme are pure style changes.",
+    "TypeVariantRegistry: single Record<type, renderer> resolution with error boundary and placeholder fallback."
+  ],
+  "adoption_strategy": "Adapt (narrowly). Do not adopt the codebase or its SiteConfig; the architect has already ruled that out and the code confirms why (untyped props, five drifting catalogue copies, generic variants, double renderer, fake agent). Lift three mechanisms into our own stack: the coerce-then-validate pre-pass in front of Zod, the deterministic fallback rung with provenance tagging, and the container-query preview root with token injection. Keep the snapshot-undo design on file for the post-V1 editor. Treat the prompt-catalogue drift as a concrete cautionary example: generate any model-visible catalogue from the Zod schemas.",
+  "recommendation": "Adapt",
+  "novelty_score": 3,
+  "difficulty_score": 2,
+  "pipeline_stages_affected": ["renderer", "visual_editor", "design_system", "agent_orchestration", "qa_gate"],
+  "evidence": [
+    "src/blocks/types.ts (BlockConfig/PageConfig/SiteConfig/ThemeConfig; props: Record<string, unknown>)",
+    "src/blocks/registry.tsx (blockRenderers Record, BlockErrorBoundary, PlaceholderBlock, RenderBlock)",
+    "src/blocks/hero/HeroBlock.tsx (switch(block.variant) -> HeroCentered/Split/Gradient/Minimal)",
+    "src/lib/block-metadata.ts (variants[] + defaultProps per type; VALID_BLOCK_TYPES/VARIANT_MAP derived from it)",
+    "src/lib/generate-site.ts (generateSiteConfig ladder; validateSiteConfig/validateBlock/validateTheme coercions)",
+    "src/lib/generation-prompt.ts and api/generate.ts (two divergent prose catalogues; Gemini responseMimeType json, temperature 0.8)",
+    "src/lib/templates.ts (keyword -> hard-coded SiteConfig fallback)",
+    "src/store/configStore.ts (pushUndo/snapshot/undo/redo, MAX_UNDO=50, previewTheme bypass, persist v2 migrate)",
+    "src/editor/PropertiesPanel.tsx (blockFields hand-authored FieldDef per BlockType)",
+    "src/editor/AgentPanel.tsx (generateResponse regex matcher, setTimeout fake typing, patch Apply/Reject UI)",
+    "src/editor/Canvas.tsx + src/lib/theme-presets.ts (resolveTheme, themeToCSS -> --color-* vars, @container root)",
+    "src/lib/export-html.ts (renderBlock switch covers 13 types; exportSiteToHTML uses config.blocks only)",
+    "src/editor/JsonDrawer.tsx (setConfig(JSON.parse(editValue)) with no validation)",
+    "tests/export-html.test.ts, CLAUDE.md, README.md"
+  ]
+}

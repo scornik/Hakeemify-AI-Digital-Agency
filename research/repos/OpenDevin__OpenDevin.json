@@ -1,0 +1,41 @@
+{
+  "repo": "OpenDevin/OpenDevin",
+  "url": "https://github.com/OpenDevin/OpenDevin",
+  "category": "agents",
+  "license": "MIT",
+  "stars": 88926,
+  "last_push": "2026-09-23",
+  "status_note": "redirected: OpenDevin/OpenDevin is the same repository as All-Hands-AI/OpenHands, which itself now redirects to OpenHands/OpenHands (renamed OpenDevin -> OpenHands in 2024, org moved to OpenHands in 2025, repo content rebranded 'Agent Canvas' in 2026). raw/OpenDevin_OpenDevin/meta.json resolves to full_name OpenHands/OpenHands with identical stars/pushed_at.",
+  "core_problem": "Identical to All-Hands-AI/OpenHands: sandboxed, event-sourced, budget-limited LLM coding agent. See repos/All-Hands-AI__OpenHands.json.",
+  "architecture": "Duplicate entry. The raw snapshot (README.md, package.json, tree.json) is byte-identical to raw/All-Hands-AI_OpenHands. All architecture detail (event log, ConversationState status machine, StuckDetector, dual budgets, ConfirmRisky policy, skills triggers, Workspace abstraction, Agent Canvas TS frontend) is documented in the All-Hands-AI__OpenHands entry and not repeated here.",
+  "core_innovation": "Same as All-Hands-AI/OpenHands (event log as sole agent state with pure-function limits and loop detection).",
+  "strengths": [
+    "See All-Hands-AI__OpenHands.json"
+  ],
+  "weaknesses": [
+    "Duplicate of All-Hands-AI__OpenHands; counting it separately would double-weight one codebase in any cross-repo tally."
+  ],
+  "patterns_to_steal": [
+    "See All-Hands-AI__OpenHands.json (EventSourcedRunState, DualBudgetGuard, LoopSignatureDetector, TriggeredKnowledgeInjection, RiskThresholdConfirmation)."
+  ],
+  "patterns_to_avoid": [
+    "See All-Hands-AI__OpenHands.json."
+  ],
+  "reusable_patterns": [
+    "See All-Hands-AI__OpenHands.json."
+  ],
+  "adoption_strategy": "Adapt, identical to All-Hands-AI__OpenHands: re-implement the event log, status enum, dual budget guard and repeat-selection detector in TypeScript; do not adopt the Python SDK. Treat the OpenDevin name only as a historical alias when searching papers/blogs (the 'OpenDevin' arXiv paper describes the V0 event-stream + AgentController + sandbox architecture that is still the conceptual basis of the V1 SDK).",
+  "recommendation": "Adapt",
+  "novelty_score": 6,
+  "difficulty_score": 4,
+  "pipeline_stages_affected": [
+    "agent_orchestration",
+    "qa_gate",
+    "anti_slop"
+  ],
+  "evidence": [
+    "raw/OpenDevin_OpenDevin/meta.json full_name == 'OpenHands/OpenHands', html_url https://github.com/OpenHands/OpenHands, same pushed_at as raw/All-Hands-AI_OpenHands",
+    "raw/OpenDevin_OpenDevin/README.md identical to raw/All-Hands-AI_OpenHands/README.md (Agent Canvas)",
+    "repos/All-Hands-AI__OpenHands.json for all substantive analysis"
+  ]
+}

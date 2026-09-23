@@ -1,0 +1,54 @@
+{
+  "repo": "TransformerOptimus/SuperAGI",
+  "url": "https://github.com/TransformerOptimus/SuperAGI",
+  "category": "agents",
+  "license": "MIT",
+  "stars": 17687,
+  "last_push": "2025-01-22",
+  "status_note": "dormant; last commit 2025-01-22 (a merged PR), no releases or roadmap activity since; company pivoted to a hosted product. Not archived.",
+  "core_problem": "A self-hosted platform (FastAPI + Celery + Postgres + Redis + Next.js GUI) to configure, run, schedule and monitor autonomous 'AutoGPT-style' agents with toolkits, marketplace templates and DB-defined workflows.",
+  "architecture": "superagi/: FastAPI app (main.py, controllers/) with SQLAlchemy models (models/: Agent, AgentConfiguration key/value rows such as 'toolkits', 'permission_type', 'max_iterations', AgentExecution with status enum, AgentExecutionFeed, AgentExecutionPermission, AgentTemplate with marketplace_template_id, Toolkit, Resource, workflows/AgentWorkflowStep). Execution is a Celery worker (worker.py, jobs/) that runs one step per tick through superagi/agent/*: agent_iteration_step_handler.py builds the prompt (agent_prompt_builder.py, prompts/*.txt), calls the LLM, parses the reply with output_parser.py (AgentSchemaOutputParser: regex-extract a JSON block via helper/json_cleaner.JsonCleaner, ast.literal_eval fallback) and dispatches a tool via tool_executor.py; agent_tool_step_handler.py runs a fixed tool step; agent_workflow_step_wait_handler.py implements WAIT_STEP. Workflows are database graphs: AgentWorkflowStep rows have step_type TRIGGER|NORMAL, action_type TOOL|ITERATION_WORKFLOW|LLM|WAIT_STEP and a next_steps JSONB list of {step_id, step_response} edges; fetch_next_step picks the edge whose step_response matches the LLM's answer ('YES'/'NO'/'COMPLETE'); workflow_seed.py hard-codes the shipped workflows (e.g. build_sales_workflow with 11 steps). Human-in-the-loop: AgentConfiguration permission_type 'RESTRICTED' makes output_handler.py return WAITING_FOR_PERMISSION for non-excluded tools, and the execution stays in that status until a permission row is approved via controllers/agent_execution_permission.py. Tools (tools/*): BaseTool pydantic with args_schema and create_function_schema, grouped in toolkits (github, slack, jira, email, google_search, webscraper, image_generation, code...). resource_manager/: file_manager for uploads plus llama-index summaries (resource_summary.py) stored as vector docs. vector_store/ and vector_embeddings/ for knowledge search. GUI is a Next.js app in gui/ (package.json at root is for the GUI). Python 3.9-era code, LangChain 0.0.x pinned.",
+  "core_innovation": "Modelling an agent's workflow as database rows with LLM-response-conditioned edges (next_steps JSONB keyed by 'YES'/'NO'/'COMPLETE'), so non-developers can compose branching agent workflows and share them as marketplace templates.",
+  "strengths": [
+    "Execution status is a first-class DB enum (RUNNING, PAUSED, WAITING_FOR_PERMISSION, WAIT_STEP, COMPLETED...) and the worker is stateless per tick, so runs survive worker restarts.",
+    "Permission gating is a data setting (permission_type RESTRICTED) that pauses the execution row rather than a prompt instruction.",
+    "Workflow graph with response-conditioned edges is a genuinely declarative, inspectable control flow for its era.",
+    "Toolkits declare pydantic argument schemas, so tool calls are schema-checked."
+  ],
+  "weaknesses": [
+    "Dormant since January 2025; pinned to ancient LangChain/OpenAI SDKs; Python 3.9 era; security-sensitive stack (Celery, Redis, Docker-compose) with no maintenance.",
+    "AutoGPT-style loop: the LLM emits free-form JSON 'thoughts/command' that is regex-cleaned; no schema-validated structured outputs, no retry on validation failure.",
+    "Workflow edges are selected by string-matching the LLM's answer ('YES'/'NO'), i.e. model-narrated control flow.",
+    "No stuck detection, no cost budget (only max_iterations config key), no checkpoint/time travel; feeds are append-only logs for display, not for replay.",
+    "Heavy infrastructure (Postgres + Redis + Celery + Next.js + optional local-LLM containers) for what is a single-agent loop.",
+    "Python and a separate React GUI; nothing reusable in our TypeScript stack."
+  ],
+  "patterns_to_steal": [
+    "Execution status enum in the database including WAITING_FOR_PERMISSION and WAIT_STEP, with a stateless worker that advances one step per tick -> agent_orchestration: model our build run as a Postgres row with a status column and a worker that processes 'one stage per job', so owner input (positioning, gap report) is a status, not an in-memory await.",
+    "permission_type as a per-run data setting rather than prompt text -> qa_gate: a run-level 'auto_fix_policy' column (none | low_risk | all) decides which QA fixes apply without confirmation."
+  ],
+  "patterns_to_avoid": [
+    "LLM-answer-string-matched workflow edges ('YES'/'NO') -> routing must come from predicate snapshots computed in code.",
+    "Regex JSON extraction (JsonCleaner) as the output contract -> use native structured outputs + Zod safeParse with bounded re-ask.",
+    "Marketplace templates fetched at runtime from a vendor URL -> playbooks are in-repo, versioned, human-reviewed.",
+    "Resource summaries via llama-index vector store as the agent's knowledge -> FactRegistry with provenance, not embeddings."
+  ],
+  "reusable_patterns": [
+    "PersistedExecutionStatus: run state lives in a DB row with an explicit enum including human-wait states; workers are stateless.",
+    "DataDrivenPermissionGate: whether an action needs approval is a stored setting evaluated by code, not an instruction to the model."
+  ],
+  "adoption_strategy": "Ignore. Dormant, Python, AutoGPT-era loop with regex-parsed outputs and LLM-string-matched branching; nothing here beats LangGraph or OpenHands on the mechanisms we need. The one salvageable idea, a DB-persisted execution status enum with WAITING_FOR_PERMISSION advanced by a stateless worker, is trivial to implement with our Postgres and is already implied by the OpenHands/LangGraph recommendations.",
+  "recommendation": "Ignore",
+  "novelty_score": 2,
+  "difficulty_score": 6,
+  "pipeline_stages_affected": [
+    "agent_orchestration"
+  ],
+  "evidence": [
+    "git log -1: 2025-01-22 'Merge pull request #1448 from r0path/main'",
+    "superagi/models/workflows/agent_workflow_step.py (step_type TRIGGER/NORMAL, action_type TOOL/ITERATION_WORKFLOW/LLM/WAIT_STEP, next_steps JSONB, fetch_next_step by step_response), superagi/agent/workflow_seed.py (build_sales_workflow, add_next_workflow_step with 'YES'/'NO'/'COMPLETE')",
+    "superagi/agent/output_parser.py (AgentSchemaOutputParser, JsonCleaner.extract_json_section), superagi/agent/output_handler.py (permission_type RESTRICTED -> WAITING_FOR_PERMISSION), superagi/agent/types/agent_execution_status.py",
+    "superagi/agent/{agent_iteration_step_handler,agent_tool_step_handler,agent_workflow_step_wait_handler,task_queue}.py; superagi/models/{agent_template,agent_config,agent_execution_permission}.py (marketplace_url)",
+    "superagi/tools/base_tool.py (BaseTool, args_schema, create_function_schema), superagi/resource_manager/*, superagi/vector_store/, gui/ (Next.js)"
+  ]
+}

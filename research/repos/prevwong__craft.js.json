@@ -1,0 +1,74 @@
+{
+  "repo": "prevwong/craft.js",
+  "url": "https://github.com/prevwong/craft.js",
+  "category": "visual-editors",
+  "license": "MIT",
+  "stars": 8749,
+  "last_push": "2025-02-14",
+  "status_note": "maintenance-mode / effectively dormant: last release @craftjs/core 0.2.12 on 2025-02-14, 10 commits in the 24 months before that, 227 open issues and 15 open PRs; issues filed in 2026 (#752 perf, #753 setProp) have no maintainer response. Not archived.",
+  "core_problem": "A headless-ish React framework for building drag-and-drop page editors: user-supplied React components become editable nodes in a normalized tree, with serialization, rules and undo provided by the library while the UI is entirely yours.",
+  "architecture": "packages/core/src. Data model (interfaces/nodes.ts): flat normalized map `Nodes: Record<NodeId, Node>`; each Node = {id, data: NodeData, rules, related, events, dom: HTMLElement|null, _hydrationTimestamp}; NodeData = {type: string | React.ElementType, props: Record<string, any>, name, displayName, isCanvas, parent, nodes: NodeId[], linkedNodes: Record<string, NodeId>, hidden, custom}. `nodes` = ordered children of a canvas; `linkedNodes` = named slots owned by a component (via `<Element id=\"x\" is={...} canvas>`), so a parent addresses sub-canvases by key not index. Serialization (utils/serializeNode.tsx, deserializeNode.tsx): `SerializedNodes = Record<NodeId, SerializedNode>` where type becomes `string | {resolvedName}`; the `resolver: Record<string, ElementType>` (interfaces/editor.ts) is the only link between JSON and code, with a cached reverse Map (utils/resolveComponent.ts) and an invariant if a component is missing. Props are arbitrary JSON; functions are dropped; React elements inside props are serialized recursively. No schema validation of props exists. State: editor/store.tsx uses @craftjs/utils `useMethods` (the use-methods pattern) over immer `produceWithPatches`; ActionMethodsWithConfig declares `ignoreHistoryForActions: ['setDOM','setNodeEvent','selectNode','clearEvents','setOptions','setIndicator']` and a `normalizeHistory` that prunes events pointing at deleted nodes after undo/redo. History (@craftjs/utils/src/History.ts) is a timeline of {patches, inversePatches, timestamp} with a pointer; `throttleAdd` merges entries within 500 ms, `merge` folds into the last entry, `undo/redo` are `applyPatches`. Actions (editor/actions.ts): add/addNodeTree/addLinkedNodeFromTree/delete/deserialize/move/replaceNodes/setProp/setHidden/setCustom/setDOM/selectNode/setState. DOM mapping: `useNode()` (hooks/useNode.ts -> nodes/useInternalNode.ts) exposes `connectors.connect(el)` and `connectors.drag(el)`; DefaultEventHandlers.connect calls `store.actions.setDOM(id, el)` so the node record holds its live element and event listeners are attached to it; drop placement is computed from getBoundingClientRect in events/findPosition.ts. Rules live on the component: `Component.craft = {rules: {canDrag, canDrop, canMoveIn, canMoveOut}, props, related: {settings: SettingsComponent}, isCanvas}` (UserComponentConfig). `Frame data={json}` (render/Frame.tsx) deserializes once with `history.ignore()`, or parses JSX children via `query.parseReactElement().toNodeTree()`; `Editor onNodesChange(query)` fires with `query.serialize()` on every change (full-tree serialization each time; issue #752). Rendering is React only: NodeElement -> RenderNode -> the user component; no static/headless renderer is shipped.",
+  "core_innovation": "A normalized node map with named `linkedNodes` slots where undo/redo is an immer patch timeline over the whole editor state, and the only JSON-to-code coupling is a string resolver map.",
+  "strengths": [
+    "Flat normalized tree (id -> node, parent pointers, ordered `nodes`, keyed `linkedNodes`) is the cleanest editor data model in this batch and maps directly onto a section tree with named slots.",
+    "Immer patch-based history: cheap, serialisable, throttled merge of rapid edits, explicit `ignoreHistoryForActions` list and `history.ignore()/throttle()/merge()` modifiers.",
+    "Resolver pattern keeps the persisted JSON independent of component identity; a missing resolver entry fails loudly with an invariant.",
+    "Rules (`canDrag/canDrop/canMoveIn/canMoveOut`) are declared on the component and receive query helpers, so structural constraints live with the component definition.",
+    "Headless UI: the library supplies no panels or styling, so an editor's chrome can be minimal.",
+    "MIT; React 16.8-19 peer range."
+  ],
+  "weaknesses": [
+    "Dormant: no release since Feb 2025, 227 open issues, unanswered 2026 bug reports; adopting means forking.",
+    "Props are `Record<string, any>` with no validation; SerializedNodes is a typed shape but not a typed contract for content.",
+    "Hard React runtime coupling: nodes render only through React and the node holds a live `dom` pointer; there is no way to sit over server-rendered Astro HTML, and no static renderer exists (you would write a React twin of every Astro section).",
+    "Full-tree `query.serialize()` on every change and a global module-level resolver cache (resolveComponent.ts CACHED_RESOLVER_DATA) - known perf and multi-editor footguns.",
+    "HTML5 drag-and-drop with placement from bounding rects inside the page (no iframe isolation); editor CSS and page CSS collide.",
+    "Undo history is in-memory React state only; no persistence format for the patch log."
+  ],
+  "patterns_to_steal": [
+    "Immer `produceWithPatches` timeline (patches + inversePatches, pointer, throttled merge, ignore/merge modifiers) -> the post-V1 editor's undo/redo as a JSON-Patch log over the Zod SiteDefinition, persisted per session and replayable; also gives the Telemetry stage an exact edit trail.",
+    "Normalized `Record<id, node>` with `parent`, ordered `nodes` and keyed `linkedNodes` -> SiteDefinition page tree: sections by id with named slots (e.g. `hero.media`, `footer.legal`) instead of anonymous children arrays.",
+    "Resolver map `resolvedName -> component` with reverse lookup and invariant on miss -> section variant registry: SiteDefinition stores `variant_id`, the Astro renderer resolves it to a component and fails the build (not silently) on an unknown id.",
+    "Rules declared on the component (`craft.rules`) with query helpers -> `requires` / `design_compat` / allowed-parent predicates evaluated by the Compat filter and re-used by the editor to reject invalid drops.",
+    "`ignoreHistoryForActions` + `normalizeHistory` -> separate ephemeral editor state (selection, hover, dom refs) from the document so undo never touches UI state and dangling references are pruned after undo."
+  ],
+  "patterns_to_avoid": [
+    "Live `dom: HTMLElement` stored on the data node and `connectors.connect(ref)` -> couples the document to a React runtime; over Astro output the mapping must be attribute-based (`data-sd-path`) from the rendered HTML, not a ref registry.",
+    "Untyped `props: any` on nodes -> every section's props must be a Zod-validated variant schema; do not accept the library's open props bag.",
+    "Rendering the editable page with the editor's React tree -> forces a React implementation of every section; Astro must remain the single renderer, with the editor as an overlay.",
+    "Full-tree serialization on every change (`onNodesChange`) -> emit patches, not snapshots."
+  ],
+  "reusable_patterns": [
+    "PatchTimelineUndo: history as immer/JSON-Patch forward+inverse patch pairs with a pointer, throttled merging and an ignore list of non-document actions.",
+    "NormalizedNodeMapWithNamedSlots: id-keyed nodes, parent pointers, ordered children plus keyed `linkedNodes` slots.",
+    "StringResolverRegistry: persisted documents reference components by name; a resolver map restores them and fails loudly on unknown names.",
+    "ComponentDeclaredRules: canDrag/canDrop/canMoveIn/canMoveOut predicates attached to the component definition and evaluated with tree query helpers.",
+    "EphemeralStateSeparation: selection/hover/dom refs are excluded from history and normalized after undo/redo."
+  ],
+  "adoption_strategy": "Adapt - do not depend on @craftjs/core (dormant, untyped props, React-render-bound). Re-implement its two good ideas in ~300 lines on our stack: (1) a `history.ts` using immer `produceWithPatches` over the Zod SiteDefinition with throttle/merge/ignore semantics and a persisted patch log; (2) a normalized node map with keyed slots as the in-editor working form of the page tree, converted to/from the SiteDefinition. Keep the section-variant registry as a string resolver that the Astro renderer and the editor share. The architectural fork this repo exposes: if sections are authored as .astro files, no React editor (craft, Puck, react-page) can render them, so the post-V1 editor must be an overlay on Astro dev-server output; if sections were authored as React and SSR'd by Astro without hydration they become editable by React editors but lose Astro-native features. Decide this before the section library is built.",
+  "recommendation": "Adapt",
+  "novelty_score": 5,
+  "difficulty_score": 4,
+  "pipeline_stages_affected": [
+    "visual_editor",
+    "renderer",
+    "telemetry",
+    "cms"
+  ],
+  "evidence": [
+    "packages/core/package.json: @craftjs/core 0.2.12, MIT, deps @craftjs/utils, lodash, tiny-invariant; peer react ^16.8 || ^17 || ^18 || ^19",
+    "packages/core/src/interfaces/nodes.ts: Node, NodeData (nodes, linkedNodes, parent, props: Record<string, any>), SerializedNode, SerializedNodes, NodeRules, UserComponentConfig",
+    "packages/core/src/interfaces/editor.ts: Resolver = Record<string, string | React.ElementType>; EditorState {nodes, events, options, indicator}; Options.onNodesChange/normalizeNodes",
+    "packages/core/src/utils/serializeNode.tsx and deserializeNode.tsx: reduceType -> {resolvedName}, function props dropped, recursive element props, invariant on missing resolver entry",
+    "packages/core/src/utils/resolveComponent.ts: module-level CACHED_RESOLVER_DATA reverse Map",
+    "packages/utils/src/History.ts: timeline of {patches, inversePatches, timestamp}, throttleAdd(500ms), merge, undo/redo via immer applyPatches",
+    "packages/utils/src/useMethods.ts: produceWithPatches, enablePatches, HISTORY_ACTIONS",
+    "packages/core/src/editor/store.tsx: editorInitialState, ActionMethodsWithConfig.ignoreHistoryForActions, normalizeHistory",
+    "packages/core/src/editor/actions.ts: add/addNodeTree/delete/deserialize/move/setProp/setDOM/selectNode/setState",
+    "packages/core/src/events/DefaultEventHandlers.ts: connect -> store.actions.setDOM(id, el); drag connector",
+    "packages/core/src/hooks/useNode.ts and nodes/useInternalNode.ts: connectors.connect/drag",
+    "packages/core/src/render/Frame.tsx: data/json deserialize with history.ignore(), parseReactElement().toNodeTree()",
+    "packages/core/src/editor/Editor.tsx line ~97: onNodesChange called with query.serialize() on each change",
+    "gh api: releases 2025-02-14 (core 0.2.12, utils 0.2.5, layers 0.2.7); 10 commits since 2024-09-01; 15 open PRs; open issues #751-#753 dated 2026 unanswered"
+  ]
+}

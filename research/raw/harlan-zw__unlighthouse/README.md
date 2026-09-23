@@ -1,0 +1,93 @@
+![unlighthouse - Scan your entire website with Google Lighthouse.](https://repository-images.githubusercontent.com/423079536/c88a81ee-43ec-40fc-a615-1d29bbeaaeb4)
+
+<h1>Unlighthouse</h1>
+
+[![npm version][npm-version-src]][npm-version-href]
+[![npm downloads][npm-downloads-src]][npm-downloads-href]
+[![License][license-src]][license-href]
+
+<p align="center">
+Unlighthouse scans your entire site using Google Lighthouse,<br> with a modern UI, minimal config and smart sampling.
+</p>
+
+<p align="center"><a href="https://inspect.unlighthouse.dev/">View Demo</a></p>
+
+<p align="center">
+<table>
+<tbody>
+<td align="center">
+<sub>Made possible by my <a href="https://github.com/sponsors/harlan-zw">Sponsor Program 💖</a><br> Follow me <a href="https://twitter.com/harlan_zw">@harlan_zw</a> 🐦 • Join <a href="https://discord.gg/275MBUBvgP">Discord</a> for help</sub><br>
+</td>
+</tbody>
+</table>
+</p>
+
+## Quick Setup
+
+Run the following command:
+
+```bash
+npx unlighthouse --site <your-site>
+# or PNPM
+pnpm dlx unlighthouse --site <your-site>
+```
+
+> [!TIP]
+> Generate an Agent Skill for this package using [skilld](https://github.com/harlan-zw/skilld):
+> ```bash
+> npx skilld add unlighthouse
+> ```
+
+_Requirements: Node >= 22.18.0._
+
+## Getting Started
+
+Install instructions for all integrations can be found on the [docs](https://unlighthouse.dev/) site.
+
+Need a hand? Join the [Discord](https://discord.gg/275MBUBvgP) for one-on-one help.
+
+### gitignore
+
+Unlighthouse will save your reports in `outputDir`,
+it's recommended you .gitignore these files.
+
+```shell
+.unlighthouse
+```
+
+#### Debugging
+
+If you run into any issues with Unlighthouse, the first step should be to re-run the scan with debugging enabled.
+
+```bash
+# NPM
+npx unlighthouse --site unlighthouse.dev --debug
+# or PNPM
+pnpm dlx unlighthouse --site unlighthouse.dev --debug
+```
+
+## Docs
+
+Integration instructions, Guides, API and config spec can be found on [docs](https://unlighthouse.dev/) site.
+
+## Sponsors
+
+<p align="center">
+  <a href="https://raw.githubusercontent.com/harlan-zw/static/main/sponsors.svg">
+    <img src='https://raw.githubusercontent.com/harlan-zw/static/main/sponsors.svg' alt='Sponsors'/>
+  </a>
+</p>
+
+## License
+
+Licensed under the [MIT license](https://github.com/harlan-zw/unlighthouse/blob/main/LICENSE.md).
+
+<!-- Badges -->
+[npm-version-src]: https://img.shields.io/npm/v/unlighthouse/latest.svg?style=flat&colorA=18181B&colorB=28CF8D
+[npm-version-href]: https://npmjs.com/package/unlighthouse
+
+[npm-downloads-src]: https://img.shields.io/npm/dm/unlighthouse.svg?style=flat&colorA=18181B&colorB=28CF8D
+[npm-downloads-href]: https://npmjs.com/package/unlighthouse
+
+[license-src]: https://img.shields.io/github/license/harlan-zw/unlighthouse.svg?style=flat&colorA=18181B&colorB=28CF8D
+[license-href]: https://github.com/harlan-zw/unlighthouse/blob/main/LICENSE.md

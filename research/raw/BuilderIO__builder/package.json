@@ -1,0 +1,56 @@
+{
+  "name": "@builder.io/root",
+  "private": true,
+  "workspaces": [
+    "packages",
+    "packages/sdks-tests",
+    "packages/sdks",
+    "packages/react",
+    "packages/core",
+    "packages/react-tests/*",
+    "packages/sdks/e2e/*",
+    "packages/sdks/snippets/*",
+    "packages/sdks/output/*"
+  ],
+  "devDependencies": {
+    "@changesets/cli": "^2.27.1",
+    "dotenv": "^16.0.3",
+    "nx": "^19.6.5",
+    "nx-cloud": "^19.0.0",
+    "octokit": "^2.0.14",
+    "prettier": "^3.2.5",
+    "zx": "7.2.1"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BuilderIO/builder"
+  },
+  "scripts": {
+    "ci:lint": "prettier --check '**/*.{js,jsx,ts,tsx}'",
+    "lint:fix": "prettier --write '**/*.{js,jsx,ts,tsx}'",
+    "update-npm-dependency": "zx ./scripts/update-npm-dependency.mjs",
+    "g:changeset": "changeset",
+    "g:nx": "cd $INIT_CWD && nx"
+  },
+  "engines": {
+    "yarn": ">= 3.0.0"
+  },
+  "packageManager": "yarn@3.6.1",
+  "resolutions": {
+    "tar-fs": "2.1.4",
+    "minimist": "^1.2.7",
+    "json5": "2.2.1",
+    "@builder.io/react": "workspace:*",
+    "@builder.io/sdk": "workspace:*",
+    "react-native-builder-bob@^0.21.3": "patch:react-native-builder-bob@npm%3A0.21.3#./.yarn/patches/react-native-builder-bob-npm-0.21.3-71f7168ad6.patch"
+  },
+  "dependenciesMeta": {
+    "nx": {
+      "built": false
+    },
+    "nx-cloud": {
+      "built": false
+    }
+  }
+}

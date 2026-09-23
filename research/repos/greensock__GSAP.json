@@ -1,0 +1,75 @@
+{
+  "repo": "greensock/GSAP",
+  "url": "https://github.com/greensock/GSAP",
+  "category": "motion",
+  "license": "Proprietary 'GSAP Standard License' (no-charge, commercial use allowed, NOT OSI). No LICENSE file in repo; package.json license field = \"Standard 'no charge' license: https://gsap.com/standard-license\". Effective 2025-04-30 (last modified 2025-05-30). Permitted Uses: 'implementation and/or use of GSAP Products on any website, web application, or digital interface'. Prohibited Uses: use 'in tools that allow users to build visual animations without code that ... competes with Webflow's visual animation building capabilities'; reverse engineering for 'Competitive Products'; removing proprietary notices. All former Club plugins (SplitText, MorphSVG, ScrollSmoother, etc.) included. IP remains Webflow's. FAQ: AI-generated GSAP code is explicitly not a Prohibited Use.",
+  "stars": 28574,
+  "last_push": "2026-04-13",
+  "status_note": "active; v3.15.0; owned by Webflow since fall 2024; all plugins free since 2025-04-30",
+  "core_problem": "Framework-agnostic, high-precision property tweening with a robust timeline/sequencing model plus a plugin ecosystem (ScrollTrigger, SplitText, Flip, ScrollSmoother) that papers over browser inconsistencies.",
+  "architecture": "Single ESM/UMD package with no runtime deps. src/gsap-core.js (3,255 lines) holds the Animation base class, Tween, Timeline (nested timelines, position parameters, labels), the rAF _ticker with lagSmoothing(threshold=500ms, adjustedLag=33ms), PropTween linked lists, ease parser, utils (interpolate, mapRange, snap, pipe) and the plugin registry. Plugins are objects passed to gsap.registerPlugin() and normalized by _createPlugin into {init, render, add, kill, modifier, rawVars} + statics {targetTest, get, getSetter, aliases, register}; Tween init consults _plugins[property] for every vars key so a plugin is just a property handler (CSSPlugin is itself a plugin registered in esm/index.js). gsap.registerEffect({name, effect, plugins, defaults, extendTimeline}) registers reusable named effects that become Timeline methods. Context (gsap.context) records every tween/ScrollTrigger created inside a function so it can be revert()ed; MatchMedia extends Context: mm.add({key:'(min-width: 800px)', reduce:'(prefers-reduced-motion: reduce)'}, (ctx)=>{...}) creates a Context per condition set, registers MediaQueryList change listeners, and on change kill(revert=true) reverts all recorded tweens in reverse globalTime order then re-runs the setup. ScrollTrigger.js (1,790 lines): per-trigger start/end computed on refresh(), scroll position cached via Observer's _scrollCacheFunc (reads scrollTop only after a scroll event to avoid layout thrash), update() clamps progress and drives either toggleActions (play/pause/resume/reverse/restart/reset/complete/none for enter/leave/enterBack/leaveBack) or a scrub tween; pin via position:fixed or transform with pinSpacing; ScrollTrigger.batch() groups triggers (the classic stagger-reveal API); ScrollTrigger.normalizeScroll() intercepts wheel/touch to drive scroll from JS; ScrollTrigger.matchMedia is deprecated in favour of gsap.matchMedia. SplitText.ts (517 lines, rewritten 2025, TypeScript): splits with Intl.Segmenter, options aria:'auto'|'hidden'|'none' (auto sets aria-label on parent and aria-hidden on fragments, reverting on revert()), deepSlice for nested inline elements, autoSplit on resize/font load, mask:'lines'|'words'|'chars', propIndex CSS vars. Flip.js: getState() snapshots bounds/props, from()/to() compute FLIP deltas, absolute/nested/scale modes. ScrollSmoother.js: wraps content in .ScrollSmoother-wrapper and sets matrix3d transform on content each tick (native scrollbar preserved), data-speed/data-lag parallax effects via _transformPosition. Observer.js normalizes wheel/touch/pointer/scroll. TypeScript types shipped in types/.",
+  "core_innovation": "A property-agnostic tweening core where every animatable key is resolved through a plugin registry, plus gsap.matchMedia()/Context giving deterministic create-and-revert of whole animation sets keyed on media queries (including prefers-reduced-motion).",
+  "strengths": [
+    "Framework-agnostic ESM with sideEffects:false and per-plugin entry points (gsap/ScrollTrigger etc.) - fits Astro <script> islands or plain module scripts with zero React.",
+    "Measured tree-shaken cost (esbuild, min/gzip): core+CSSPlugin 71.7 kB/28.5 kB; core+ScrollTrigger 116.7 kB/46.5 kB; +SplitText 124.2 kB/49.5 kB. Individual dist mins: ScrollTrigger 18.0 kB gz, SplitText 3.7 kB gz, Flip 9.7 kB gz, ScrollSmoother 5.6 kB gz.",
+    "gsap.matchMedia() is exactly the shape of a compiled 'motion profile': a map of named media conditions to setup functions with automatic revert - reduced-motion becomes a first-class branch, not an afterthought.",
+    "ScrollTrigger is the most battle-tested scroll model (pinning, scrub, snap, batch, containerAnimation, refresh on resize/font load, limitCallbacks on startup).",
+    "SplitText 2025 rewrite bakes in a11y (aria-label/aria-hidden handling), Intl.Segmenter grapheme splitting, and autoSplit responsive reflow - solves the most common text-reveal accessibility bug.",
+    "gsap.registerEffect() is a native mechanism for a fixed, named, parameter-constrained effect vocabulary - maps directly to a pattern_allowlist.",
+    "Now free for commercial use including all former Club plugins; AI-generated GSAP code explicitly permitted."
+  ],
+  "weaknesses": [
+    "Not open source: proprietary no-charge license controlled by Webflow; no LICENSE file in the repo; terms can change. Our product (an autonomous agency that emits sites) is a 'Permitted Use' as long as it is not marketed as a visual/no-code animation builder - but the planned post-V1 visual editor must not become a Webflow-Interactions-like animation builder or it risks the 'Prohibited Uses' clause.",
+    "Heavy for our 180 kB total JS budget: core+ScrollTrigger alone is ~46.5 kB gz (~26% of budget) before any page code; there is no WAAPI/compositor path - every tween runs on the main thread via rAF, so density must be capped.",
+    "Core is a single 3,255-line JS file with a custom object model (linked lists, _gsap cache on elements); not hackable, no source-level type safety (types are hand-maintained .d.ts).",
+    "ScrollTrigger.normalizeScroll and ScrollSmoother hijack native scroll (wheel/touch interception, transform-based scroll) - conflicts with the a11y stance and with position:sticky/anchors; ScrollSmoother is the AI-slop 'luxury scroll' signature.",
+    "The library is what powers the generic 'everything reveals on scroll' aesthetic; the defaults (ScrollTrigger.batch + fade-up) are the slop pattern unless the vocabulary is constrained upstream.",
+    "Effects/plugins register globally (gsap.registerPlugin mutates a module singleton) - multiple islands must share one bundle instance."
+  ],
+  "patterns_to_steal": [
+    "gsap.matchMedia({reduce:'(prefers-reduced-motion: reduce)', motion:'(prefers-reduced-motion: no-preference)'}) + Context.revert -> the compile target for motion profile.reduced_motion_fallback: assembly emits one mm.add() block per profile branch; static-poster fallback lives in the 'reduce' branch -> motion / renderer.",
+    "registerEffect({name, effect, defaults, plugins}) -> implement the motion profile's pattern_allowlist as a fixed registry of ~10 named effects (e.g. 'reveal-lines', 'counter', 'flip-reorder') whose parameter ranges are validated by Zod at build time; the model only selects effect ids -> motion / anti_slop.",
+    "ScrollTrigger toggleActions string grammar ('play none none reverse') -> a 4-slot enum in the section variant motion schema instead of free-form callbacks -> design_system / motion.",
+    "SplitText aria:'auto' semantics (aria-label on parent, aria-hidden fragments, revert restores) -> make this a hard requirement in the a11y gate for any text-split arrangement; axe-core check that split headings still expose text -> qa_gate.",
+    "ScrollTrigger.batch(interval, batchMax) -> derive density from the section's composition.density: batchMax bounds simultaneous tweens, which is how budget_ms compiles to a concrete cap -> motion.",
+    "_ticker.lagSmoothing(500, 33) -> in the Lighthouse/Playwright QA run, record long tasks during scroll and fail if main-thread animation time exceeds the 120 ms budget -> qa_gate."
+  ],
+  "patterns_to_avoid": [
+    "ScrollSmoother / ScrollTrigger.normalizeScroll -> scroll hijacking: breaks native scroll semantics, sticky, iframe, keyboard expectations; also the canonical agency-slop signature. Never in the allowlist.",
+    "gsap.matchMedia as the only reduced-motion mechanism -> still requires JS to load; the CSS @media (prefers-reduced-motion) poster fallback must be in the Astro-rendered HTML so a11y holds if JS fails.",
+    "MorphSVG / MotionPath / Physics plugins -> decorative motion that inflates budget and reads as generated; no section family needs them.",
+    "Loading gsap/all (833 kB, 186 kB gz) or the CDN UMD bundle -> destroys the 180 kB budget; always per-plugin ESM imports.",
+    "Letting the model write GSAP code -> violates 'model selects, code computes'; GSAP calls must be generated from a typed effect registry."
+  ],
+  "reusable_patterns": [
+    "MediaQueryScopedContext: an animation context created per media condition set that records all created animations and can revert them deterministically when the condition changes.",
+    "PropertyPluginRegistry: every animatable key resolved via a registry of {init, render, kill} handlers, so new targets extend the engine without touching the core loop.",
+    "NamedEffectRegistry: registerEffect(name, defaults, requiredPlugins) turns ad-hoc tweens into a closed, parameterized vocabulary.",
+    "ToggleActionGrammar: a 4-slot enter/leave/enterBack/leaveBack action string as the entire behaviour spec for a scroll-bound animation.",
+    "CachedScrollRead: read scrollTop only after a scroll event fires (cache id bump) to avoid forced layout on every tick.",
+    "AccessibleTextSplit: keep aria-label on the container, aria-hidden on fragments, and restore DOM on revert."
+  ],
+  "adoption_strategy": "Adopt (as the vanilla motion runtime, wrapped). Use gsap core + ScrollTrigger + SplitText (~49.5 kB gz measured) behind a tiny typed 'effect registry' module of our own; the SiteDefinition motion block carries only effect ids and bounded params, and assembly compiles them to gsap.registerEffect calls inside a gsap.matchMedia() block whose 'reduce' branch renders the static poster state. Load it as one Astro client:visible island script so pages with no motion ship zero GSAP. Explicitly exclude ScrollSmoother, normalizeScroll, MorphSVG and Physics plugins from the allowlist. Legal note for the manifest: proprietary no-charge license, Webflow-owned; permitted for site output, but the post-V1 visual editor must not expose a no-code animation builder on top of GSAP.",
+  "recommendation": "Adopt",
+  "novelty_score": 6,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": [
+    "motion",
+    "renderer",
+    "anti_slop",
+    "qa_gate",
+    "design_system",
+    "visual_editor"
+  ],
+  "evidence": [
+    "raw/greensock_GSAP/package.json (license field, exports map, sideEffects:false)",
+    "scratchpad clone src/gsap-core.js lines 653-682 (_createPlugin), 886-951 (_ticker, lagSmoothing), 2834-2865 (_onMediaChange), 2870-2960 (Context), 2974-3015 (MatchMedia), 3085-3092 (registerEffect)",
+    "src/ScrollTrigger.js lines 143 (_defaults toggleActions), 613-640 (vars), 1067-1170 (update: progress clamp, toggleActions, toggleClass, fastScrollEnd), 1445 (scrollerProxy), 1514 (batch), 1754 (normalizeScroll)",
+    "src/SplitText.ts lines 26-44 (SplitTextConfig: aria, deepSlice, autoSplit, mask), 73 (Intl.Segmenter), 90-93 and 141-149 (aria handling)",
+    "src/ScrollSmoother.js lines 35-42, 85-87 (matrix3d transform), 234-337 (data-speed/data-lag effects)",
+    "src/Flip.js lines 28, 322 (_fromTo), 957-972 (from/to/fromTo)",
+    "dist/*.min.js gzip measurements; esbuild tree-shaken bundles e_gsap_core/e_gsap_st/e_gsap_st_split (scratchpad/bundle)",
+    "gsap.com/standard-license (fetched via reader proxy; gsap.com itself is behind a bot check) - Permitted/Prohibited Uses, Competitive Products, IP, AI FAQ",
+    "webflow.com/blog/gsap-becomes-free (curl) - 100% free incl. Club plugins, standard license expanded to commercial use, SplitText rewrite"
+  ]
+}

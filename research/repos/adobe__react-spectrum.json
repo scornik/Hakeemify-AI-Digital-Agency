@@ -1,0 +1,69 @@
+{
+  "repo": "adobe/react-spectrum",
+  "url": "https://github.com/adobe/react-spectrum",
+  "category": "design-systems",
+  "license": "Apache-2.0",
+  "stars": 15886,
+  "last_push": "2026-09-23",
+  "status_note": "active; react-aria 3.52 / react-aria-components 1.21 / @react-spectrum/s2 1.7. Hooks have been consolidated into packages/react-aria/src/* with @react-aria/* packages as thin re-exports (e.g. @react-aria/button/src/index.ts re-exports from 'react-aria/useButton'). Spectrum 2 style macro depends on @adobe/spectrum-tokens (separate repo) and Parcel macros.",
+  "core_problem": "Headless, hook-based accessibility and interaction primitives (React Aria) that encode WAI-ARIA patterns, cross-device press/hover/focus semantics, focus management and screen-reader announcements independently of visual design; plus Adobe's own design system (Spectrum) built on them.",
+  "architecture": "Three tiers. (1) react-aria hooks (packages/react-aria/src): useButton(props, ref) -> {buttonProps, isPressed} composes usePress (unified mouse/touch/pen/keyboard press model with press-start/end/up, virtual click detection, iOS quirks) and useFocusable, and adapts semantics per elementType (button vs a/div/span get role/tabIndex/aria-disabled). useDialog -> {dialogProps, titleProps, contentProps}: focuses dialog on mount with an iOS VoiceOver re-focus workaround, generates aria-labelledby via useSlotId, calls useOverlayFocusContain, dev-warns when no accessible title; deliberately omits aria-modal (Safari iframe bug) and relies on aria-hidden on siblings. FocusScope (focus/FocusScope.tsx, 1100 lines): contain/restoreFocus/autoFocus with a global focus-scope tree, Tab-key trapping, focus manager API. LiveAnnouncer: singleton pair of aria-live polite/assertive regions prepended to body; announce(message, assertiveness, timeout=7000) appends a node and removes it after timeout. Collections (collections/Document.ts, CollectionBuilder.tsx): a fake DOM (BaseNode/ElementNode/Document with insertBefore, dirty tracking) built by rendering children into a hidden portal so item collections are known before the real render (works in SSR); SSRProvider for stable ids. react-stately holds state machines. (2) react-aria-components (packages/react-aria-components/src): components wrap the hooks and expose state as data-* attributes (Button: data-hovered, data-pressed, data-focused, data-focus-visible, data-disabled, data-pending) and render props (utils.tsx useRenderProps: className/style/children may be functions of the state values, plus defaultClassName like 'react-aria-Button' and a `data-rac` marker); slotted contexts (Provider, useContextProps, DEFAULT_SLOT) let compound components communicate. (3) Spectrum 2 (packages/@react-spectrum/s2/style): a build-time 'style macro' (style-macro.ts, run via Parcel macros) compiles a style object into atomic class names (base-62 generated names, one @layer per priority level, conditions resolved as nested at-rules/selectors); spectrum-theme.ts declares the theme: baseColors from @adobe/spectrum-tokens variables.json via colorScale(), each ColorToken carrying {light, dark, forcedColors}; spacing as pxToRem sets; sizing multiplied by `var(--s2-scale)` for touch vs desktop density; fontSize roles ui/heading/title/body ×7; conditions {forcedColors: '@media (forced-colors: active)', touch: '@media not ((hover: hover) and (pointer: fine))', xs..breakpoints}; runtime.ts merges style strings. The docs macro simulates HCM via variables.",
+  "core_innovation": "Behaviour and accessibility as composable hooks that return spreadable prop bags, with component state surfaced as data-* attributes and render props so any styling engine — including plain static CSS — can attach to it.",
+  "strengths": [
+    "Best-in-class a11y edge-case handling captured in code (iOS VoiceOver dialog refocus, Safari aria-modal iframe bug, virtual-click detection, Samsung/iPad pointer heuristics for the `touch` condition) — knowledge our QA gate cannot regenerate.",
+    "Hooks are UI-agnostic: no styles, no DOM structure imposed; usePress unifies pointer types; FocusScope and LiveAnnouncer are framework-light utilities.",
+    "react-aria-components' data-* state attributes (data-pressed, data-focus-visible, data-pending) make interactive state stylable from a static stylesheet — compatible with our 'CSS from tokens, no runtime styling' rule.",
+    "Collections built from a hidden fake-DOM render work under SSR — relevant if islands need listboxes/menus.",
+    "Spectrum 2 style macro proves a zero-runtime atomic CSS compiler with condition ordering via @layer; ColorToken {light, dark, forcedColors} is a clean tri-condition token shape.",
+    "Apache-2.0, Adobe-backed, used by many other component libraries (a de facto standard)."
+  ],
+  "weaknesses": [
+    "React-only. In Astro each interactive island would need the React runtime (~40 kB gz for react-dom alone) plus react-aria chunks; with a 180 kB total JS budget that is a large slice for a marketing site with few interactive controls.",
+    "Component-level weight: react-aria 3.52 is a broad umbrella (i18n, date, number formatting); tree-shaking works but usePress/FocusScope alone are ~2000 lines of source.",
+    "Spectrum 2 style macro is Parcel-macro-bound (`with {type:'macro'}`), tied to @adobe/spectrum-tokens and Adobe's visual language; not reusable as a compiler for our tokens without forking.",
+    "Spectrum components carry Adobe product-UI aesthetics; irrelevant to marketing design.",
+    "Class names are versioned/postfixed (POSTFIX from package.json) and obfuscated, hampering debugging of static output."
+  ],
+  "patterns_to_steal": [
+    "State-as-data-attributes contract (data-pressed, data-hovered, data-focus-visible, data-disabled, data-pending) -> renderer + design_system: every island (or even plain Astro components using CSS :has/:focus-visible) exposes the same attribute vocabulary; design-system CSS targets it; a11y a QA rule can assert states exist.",
+    "useDialog/FocusScope/LiveAnnouncer behaviours -> renderer islands: adopt react-aria hooks directly in the few React islands that need dialogs, menus or comboboxes; do not reinvent focus containment or live announcements.",
+    "`touch` condition (`@media not ((hover: hover) and (pointer: fine))`) and `--s2-scale` density multiplier -> design_system: density/touch as a condition + a single scale variable, not a second token set.",
+    "ColorToken {light, dark, forcedColors} -> design_system: the three-condition colour token shape for YAML (`value: {light, dark, forced_colors}`), with forced-colors mapped to system colour keywords (ButtonText, Highlight...).",
+    "Render-props with defaultClassName + slotted contexts -> visual_editor (post-V1): a stable class/data-attr surface the editor can hook into without touching behaviour.",
+    "Dev-time assertions (dialog without accessible name warns) -> qa_gate: promote to hard build-time checks in Playwright/axe run."
+  ],
+  "patterns_to_avoid": [
+    "Using React Aria Components for non-interactive sections -> zero-JS Astro components; React only where a control genuinely needs it (dialog, accordion, menu, form validation).",
+    "Spectrum 2 style macro / @adobe/spectrum-tokens as our token compiler -> Parcel-bound and Adobe-branded; write our own small compiler (see MUI cssVarsParser / Chakra dictionary).",
+    "Hidden-portal collection builder for simple lists -> unnecessary complexity for marketing content lists; only for real listbox/menu islands.",
+    "Adopting react-stately state machines wholesale -> most site state (nav open, accordion) is fine in native HTML (<details>, popover attribute) with no JS."
+  ],
+  "reusable_patterns": [
+    "PropBagHook: behaviour hooks return spreadable DOM prop objects ({buttonProps, isPressed}) so markup and styling stay outside the hook.",
+    "StateDataAttributes: interaction state surfaced as data-* attributes for static-CSS styling and testable a11y states.",
+    "FocusScopeTree: nested focus scopes with contain/restore/autoFocus tracked in a global tree.",
+    "LiveRegionSingleton: two persistent aria-live regions with timed message nodes.",
+    "TouchCondition: `@media not ((hover: hover) and (pointer: fine))` plus a density scale variable.",
+    "TriConditionColorToken: {light, dark, forcedColors} per colour token."
+  ],
+  "adoption_strategy": "Adopt (narrowly) + Adapt. Adopt react-aria hooks (useButton, useDialog, FocusScope, LiveAnnouncer, useFocusRing) inside the small set of React islands that need real interactive a11y, budgeting the React runtime once per page. Adapt the data-* state vocabulary, the touch/forced-colors conditions and the tri-condition colour token into the design-system schema. Ignore Spectrum components and the S2 style macro.",
+  "recommendation": "Adopt",
+  "novelty_score": 6,
+  "difficulty_score": 4,
+  "pipeline_stages_affected": [
+    "renderer",
+    "qa_gate",
+    "design_system",
+    "visual_editor"
+  ],
+  "evidence": [
+    "packages/react-aria/src/button/useButton.ts (elementType adaptation, usePress + useFocusable composition)",
+    "packages/react-aria/src/dialog/useDialog.ts (iOS refocus workaround, useSlotId, no aria-modal rationale, dev warning)",
+    "packages/react-aria/src/focus/FocusScope.tsx (contain/restoreFocus/autoFocus, activeScope tree, useFocusManager)",
+    "packages/react-aria/src/live-announcer/LiveAnnouncer.tsx (polite/assertive logs, 7000 ms timeout)",
+    "packages/react-aria/src/collections/CollectionBuilder.tsx, Document.ts (hidden-portal fake DOM)",
+    "packages/@react-aria/button/src/index.ts (re-export shim), packages/react-aria/package.json (3.52.1)",
+    "packages/react-aria-components/src/Button.tsx (data-* attributes), utils.tsx (useRenderProps, useContextProps, DEFAULT_SLOT)",
+    "packages/@react-spectrum/s2/style/style-macro.ts (createTheme, @layer per priority, base-62 class names), spectrum-theme.ts (baseColors via colorScale, --s2-scale, fontSize roles, conditions forcedColors/touch), tokens.ts (@adobe/spectrum-tokens variables.json, ColorToken light/dark/forcedColors), s2 package.json"
+  ]
+}

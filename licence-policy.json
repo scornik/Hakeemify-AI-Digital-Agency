@@ -1,0 +1,39 @@
+{
+  "note": "Enforces ARCHITECTURE.md §1.6. The strict list applies to anything whose code can reach a client's site; the toolchain list is permissive-only but admits the permissive licences that are unavoidable transitively in the Node toolchain (ISC, 0BSD, BlueOak). Denied licences are fatal anywhere, shipped or not.",
+  "shippedRoots": ["@ada/library"],
+  "allowedShipped": [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSD-Source-Code",
+    "MPL-2.0"
+  ],
+  "allowedToolchainExtra": [
+    "ISC",
+    "0BSD",
+    "Unlicense",
+    "CC0-1.0",
+    "BlueOak-1.0.0",
+    "Python-2.0",
+    "Artistic-2.0",
+    "CC-BY-4.0"
+  ],
+  "denied": [
+    "AGPL",
+    "GPL",
+    "LGPL",
+    "SSPL",
+    "BUSL",
+    "BSL",
+    "FSL",
+    "MSCL",
+    "Elastic",
+    "Commons-Clause",
+    "UNLICENSED",
+    "proprietary",
+    "SEE LICENSE IN"
+  ],
+  "exceptions": {}
+}

@@ -1,0 +1,73 @@
+{
+  "repo": "BuildingTechAlternatives/OpenThorn",
+  "url": "https://github.com/BuildingTechAlternatives/OpenThorn",
+  "category": "ai-website-builders",
+  "license": "MIT (stated in README; no LICENSE file in the repo)",
+  "stars": 23,
+  "last_push": "2026-08-31",
+  "status_note": "active, single developer (Thomas Tschinkel), package still named 'bloom'; vite.log / dev.verify logs and a Remotion ad project are committed",
+  "core_problem": "A browser-based, bring-your-own-key AI website builder: a multi-provider tool-calling agent writes a React/TS/CSS project into a virtual filesystem, bundles it in the browser with esbuild-wasm, executes it in a hidden iframe to catch runtime errors, and deploys the result to Cloudflare Pages without any server-side code execution.",
+  "architecture": "React 19 + Vite SPA; Supabase for auth/Postgres/Realtime; Vercel functions in api/ (deploy, provider-keys, admin, supabase-oauth) sharing api/_shared.ts (JWT check, rate limit, AES-256-GCM key encryption) and re-implemented as dev middleware shims in vite.config.ts. The product core is src/lib/agent.ts (3.8k lines): runOpenThornAgent() drives a tool loop (MAX_TOOL_TURNS=30) over 12 providers (OpenAI-compatible, Anthropic, Gemini, Ollama) with per-call retry/backoff/Retry-After, a circuit breaker (3 failures, 30 s cooldown), mid-run provider failover (max 2), context compaction (estimateMessageTokens, KEEP_RECENT_TURNS=6, summary every 6 turns), and a LoopDetector that fingerprints only FAILING tool calls (3 repeats of an action or error -> loopBreakPrompt nudge). Tools (src/lib/agent-prompt.ts AGENT_TOOLS, alphabetically sorted for byte-identical cache prefixes): think, set_title, load_skill, list_files, read_file, search_files, write_file, edit_file, multi_edit, delete_file, set_schema, compile, done; selectToolsForRun() picks a core / small-refine / expanded tool set once per run. The system prompt is byte-identical across calls (dynamic state goes in <system-reminder> user messages) and skills (SKILL_BLOCKS: ui-ux-pro-max, frontend-design, react-best-practices, motion-dev-animations, performance, core-web-vitals, shadcn, karpathy-guidelines) are loaded on demand via load_skill. Write path: write_file runs agent-lint.normalizeWrittenCode (strip unused react imports, whitespace) and shouldRejectWholeFileRewrite() (refine mode, file >=160 lines, new >=65% of old size, preservedLineFraction >= 0.55 or small-refine prompt -> reject and demand multi_edit unless the prompt says rebuild/redesign). compile tool: preview-bundle.buildPreview() bundles the virtual FS via esbuild-wasm + virtualFsPlugin, with an import map that pins React 18.2 from esm.sh, a data-URL hash router replacing react-router-dom, and only packages in allowed-packages.ts (framer-motion, lucide-react, recharts, clsx, date-fns, nanoid, supabase-js; the same list is rendered into the prompt); then preview-runtime-check.runtimeSmokeTest() injects a capture script into the HTML, runs it in a sandboxed iframe (1.4 s settle, 8 s hard timeout) and reports uncaught errors, console.error, whether #root rendered, route 404s and NaN canvas draws; a passing compile sets runCtx.lastCompileOk and clears dirtySinceCompile. done tool: runDoneVerificationGate() rejects with a structured DONE_REJECTED error if (1) files changed since the last passing compile, (2) findOrphanedStylesheets() finds a .css with rules that nothing imports, (3) findDisallowedImageSources() finds remote images outside an allowlist of free hosts (unsplash/picsum/placehold.co), or (4) interactiveSmokeTest() (clicks interactive elements, checks DOM changed, no handler errors) fails; inconclusive checks never block. agent-memory.ts persists lessons.md (FIX/PATTERN/GOTCHA/TRIED/WORKS) and a CHANGELOG.md across sessions; pending error lessons are promoted only after a subsequent passing compile. set_schema declares Supabase tables (access: owner/public_read/authenticated) and api/_schema.ts generates RLS-enabled migrations. Templates (src/lib/templates.ts, 2.4k lines) are nine hand-written starter projects as file arrays. Visual click-to-edit swaps the jsx-dev-runtime for a shim that stamps data-oeid on host elements (preview-edit.ts / preview-inspect.ts).",
+  "core_innovation": "A deterministic 'done' verification gate that refuses the model's completion claim unless the exact current files have passed an in-browser build, a runtime execution smoke test, an interactive smoke test, and cross-file lint checks (orphaned stylesheet, image licensing).",
+  "strengths": [
+    "runDoneVerificationGate is exactly the 'gate before generator' posture: stale-compile, orphaned stylesheet, image-host licensing and interactive smoke test are all pure, reproducible checks that reject the model's 'done' with a structured, retryable error and a concrete suggestion.",
+    "compile = build AND execute: esbuild only transpiles, so the bundle is actually run in a sandboxed iframe with error/console/#root/route/canvas-NaN capture; 'build succeeded but crashes at runtime' is treated as failure.",
+    "allowed-packages.ts is a single dependency-free source of truth consumed by both the bundler's import map and the prompt; the model literally cannot import anything else.",
+    "Prompt-cache discipline: byte-identical system prompt, alphabetically sorted tool schemas, tool set chosen once per run, dynamic state only in <system-reminder> messages; skills loaded on demand by id.",
+    "Whole-file-rewrite guard (preservedLineFraction) and write-time lint hooks bind hygiene to the harness rather than the model's memory; LoopDetector counts only failing calls to avoid false positives on healthy edit/compile rhythms.",
+    "Robust provider layer: retry with Retry-After, circuit breaker, mid-run failover, malformed tool JSON returned to the model as structured errors, per-run token/cache telemetry.",
+    "Cross-session memory with a promotion rule (error lessons only become 'recovered lessons' after a passing compile) and a TRIED/FAILED changelog to avoid dead ends.",
+    "Good test coverage for the deterministic parts (agent-lint, preview-bundle, preview-edit/inspect, edit-fuzzy-match, virtualFsPlugin, schema-compiler)."
+  ],
+  "weaknesses": [
+    "It is a code generator (React + CSS in a virtual FS), the exact fragile paradigm we are avoiding; quality depends on the model writing good CSS, and the design 'skills' are aspirational prompting ('BOLD aesthetic direction', 'UNFORGETTABLE', 'NEVER use Inter') that the brief explicitly rejects.",
+    "No structured site model, no section library, no design-system tokens as data; 'design language' is whatever the skill prose induces. Output is not reviewable as a contract.",
+    "Image licensing gate is host-allowlist only (Unsplash/Picsum/placeholders), i.e. it steers toward generic stock, and there is no real-photo/art-direction layer at all.",
+    "In-browser esbuild-wasm preview pins React 18.2 from esm.sh and replaces react-router-dom with a hash router: the preview environment is not the deploy environment.",
+    "Single developer, 23 stars, no LICENSE file, package still named bloom, logs and a Remotion ad committed; the 3.8k-line agent.ts and 3k-line ProjectBuilderPage.tsx are hard to extract from.",
+    "Runtime checks are heuristic (1.4 s settle, click-everything smoke test) and 'inconclusive never blocks', so the gate can pass a page that is visually broken; there is no axe/Lighthouse/schema validation.",
+    "Sensitive product concerns for us: Adsterra ad banners, admin panel, blog CMS, community page: most of the repo is product surface unrelated to generation."
+  ],
+  "patterns_to_steal": [
+    "Deterministic done-gate with structured retryable rejections (code, message, suggestion) -> our Launch QA gate: the agent's 'ship' call is refused unless the current SiteDefinition hash matches the last passing Playwright/axe/Lighthouse/placeholder run; rejection payload names the failing check and the fix.",
+    "Stale-compile tracking (dirtySinceCompile + lastCompileOk + cached last preview) -> Assembly/QA: hash the SiteDefinition and reuse the last QA report when unchanged; any mutation invalidates it.",
+    "Cross-file deterministic lints that pass the compiler but break the page (orphaned stylesheet, disallowed image hosts) -> Anti-slop tier 1 and Launch QA: unreferenced assets, images not from the FactRegistry/asset store, sections referencing missing facts.",
+    "Single-source allowlist consumed by both the runtime resolver and the model-visible catalogue (allowed-packages.ts) -> Eligibility/Creative Direction: the eligible design_system_ids, art_direction_ids and variants shown to the model must be the same objects the renderer accepts; generate the prompt catalogue from them.",
+    "Prompt-cache discipline (static system prompt, sorted tool schemas, per-run tool set, dynamic state in reminders) -> agent orchestration for every model call in the pipeline.",
+    "LoopDetector that fingerprints only failing actions and injects a nudge -> agent orchestration for the audit/fix loop.",
+    "Whole-file-rewrite guard (preservedLineFraction) -> visual editor / fix loop: reject a model 'fix' that rewrites most of a section when the prompt was a small refine; require a targeted patch.",
+    "Lessons promoted only after a passing verification -> Telemetry -> priors promotion: a prior only moves when a later gate confirms the fix."
+  ],
+  "patterns_to_avoid": [
+    "Skill prompts like frontend-design.ts ('pick an extreme tone', 'never use Inter', 'unexpected layouts') -> aspirational prompting is rejected; taste must be encoded in authored design systems and section variants, not adjectives.",
+    "Generating React/CSS source as the artefact -> our artefact is SiteDefinition JSON rendered by Astro; the model never writes markup.",
+    "Stock-photo host allowlist as the image policy -> we need real owner photos with asset_constraints and art direction; stock URLs would fail our 'real photos' rule.",
+    "In-browser bundling with pinned esm.sh React and a hash-router shim -> preview must be the real Astro build, not an approximation.",
+    "Karpathy/ui-ux-pro-max style mega-prompts (hundreds of rules) -> rules that can be checked should be code (axe, regex, budgets), not prompt text."
+  ],
+  "reusable_patterns": [
+    "DoneVerificationGate: the completion tool is refused unless the current artefact hash has passed all deterministic checks; rejection is structured and retryable.",
+    "BuildThenExecute: treat 'compiles' as insufficient; run the artefact in a sandbox and capture runtime/console/render signals.",
+    "SharedAllowlist: one dependency-free module defines what the model may reference and what the runtime will resolve.",
+    "StaticPromptDynamicReminder: keep system prompt and tool schemas byte-stable; move per-turn state into reminder messages.",
+    "FailingCallLoopDetector: fingerprint only errored tool calls and repeated error messages; nudge after N repeats.",
+    "PreservedLineFractionGuard: reject wholesale rewrites when most of the original survives verbatim.",
+    "VerifiedLessonPromotion: memory entries derived from errors are promoted only after a later passing check."
+  ],
+  "adoption_strategy": "Adapt. Ignore the product and the code-generation paradigm, but port the verification harness ideas into our QA gate and agent loop: a structured done/ship gate keyed to the artefact hash, build-then-execute smoke tests (our equivalent is the Astro build plus Playwright crawl), cross-file deterministic lints, the shared allowlist pattern for eligible ids, and the prompt-cache/loop-detection discipline. These are 100-300 line mechanisms each and map cleanly onto TypeScript. Explicitly do not port the skill prompts or the image-host policy.",
+  "recommendation": "Adapt",
+  "novelty_score": 6,
+  "difficulty_score": 4,
+  "pipeline_stages_affected": ["qa_gate", "agent_orchestration", "anti_slop", "research"],
+  "evidence": [
+    "src/lib/agent.ts: runOpenThornAgent (l.1056), executeTool cases (l.1966-2650), compile tool (l.2467), runDoneVerificationGate (l.2669-2758), LoopDetector (l.994), shouldRejectWholeFileRewrite/preservedLineFraction (l.798-847), compaction constants (l.268-274), circuit breaker/backoff constants (l.294-304)",
+    "src/lib/agent-prompt.ts: design principles header, AGENT_TOOLS (sorted), selectToolsForRun, SKILL_BLOCKS, LEAN_TOOLSET_REMINDER, COMPACTION_PROMPT",
+    "src/lib/agent-lint.ts: normalizeWrittenCode, findOrphanedStylesheets, ALLOWED_IMAGE_HOSTS, findDisallowedImageSources",
+    "src/lib/allowed-packages.ts: ALLOWED_PACKAGES / RESOLVABLE_PACKAGES shared by bundler and prompt",
+    "src/lib/preview-bundle.ts: getImportMap (esm.sh React 18.2 pin, data-URL router, instrument jsx-dev-runtime), buildPreview",
+    "src/lib/virtualFsPlugin.ts, src/lib/preview-runtime-check.ts (RuntimeCheckResult, buildCaptureScript, runtimeSmokeTest, interactiveSmokeTest)",
+    "src/lib/agent-memory.ts (LessonEntry types, lessons.md/CHANGELOG.md), src/lib/skills/frontend-design.ts, src/lib/skills/ui-ux-pro-max.ts",
+    "src/lib/templates.ts (9 starter projects as file arrays), src/lib/__tests__/* (agent-lint, preview-bundle, preview-edit, virtualFsPlugin, schema-compiler tests)",
+    "CLAUDE.md, README.md (License section), api/_shared.ts, api/_schema.ts, vercel.json CSP"
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "repo": "vercel-labs/json-render",
+  "url": "https://github.com/vercel-labs/json-render",
+  "category": "strategy-doc-extra (generative-ui framework)",
+  "license": "Apache-2.0",
+  "stars": 18121,
+  "last_push": "2026-09-23",
+  "status_note": "active; Vercel Labs; not on the original repo list but cited in implementation-strategy.md",
+  "core_problem": "Let an LLM generate a UI reliably by constraining it to a developer-defined component catalogue, validating the JSON it emits against a Zod schema, and rendering it progressively as it streams.",
+  "architecture": "Monorepo. @json-render/core holds the schema builder (packages/core/src/schema.ts: defineCatalog(schema, {components: {Name: {props: zod, description}}, actions})), which derives three things from one catalogue: catalog.prompt() (system prompt listing allowed components/props/rules), catalog.jsonSchema({strict:true}) (strict JSON Schema for provider structured-output APIs; records collapsed because additionalProperties must be false), and catalog.validate(spec) (Zod). The spec is a FLAT document: {root: key, elements: {key: {type, props, children[], slots{}, visible?, on?, repeat?}}, state} rather than a nested tree, so that streaming RFC 6902 JSON Patch lines (/root first, then /elements/... and /state/...) can fill the UI progressively. spec-validator.ts performs structural checks with machine-readable codes (missing_root, missing_child, orphaned_element, visible_in_props, repeat_state_mismatch...). visibility.ts defines declarative conditions ({$state, eq|gt|...}, $and/$or, $item/$index for repeats) validated by strict Zod. edit-modes.ts supports three edit wire formats for refinement (RFC 6902 patch, RFC 7396 merge, unified diff) with per-mode prompt instructions. state-store.ts plus adapters (redux/zustand/jotai/xstate). directives.ts ($format, $math, $t...). Renderers per target: react, vue, svelte, solid, react-native, next (routes/layouts/SSR), remotion (video), react-pdf, react-email, ink, image (Satori), react-three-fiber. @json-render/shadcn ships 36 catalogue-ready shadcn components. @json-render/codegen turns a spec into source code. Devtools with stream taps.",
+  "core_innovation": "One catalogue definition compiles to prompt + strict JSON Schema + validator simultaneously, so the thing the model is told, the thing the API enforces, and the thing the runtime checks can never drift apart.",
+  "strengths": [
+    "Single source of truth: catalogue -> prompt(), jsonSchema(strict), validate(), zodSchema(). This is exactly the 'model chooses within what code permits' principle, productionised.",
+    "Flat elements map keyed by id enables streaming, patch-based edits and stable references; better for undo/redo and visual editing than a nested tree.",
+    "Structured error codes from spec validation give a deterministic repair loop (re-prompt with the specific code) instead of 'try again'.",
+    "Three edit modes (patch/merge/diff) for refinement of an existing spec: a mature answer to 'how does the model edit, not regenerate'.",
+    "Declarative visibility/conditions and directives keep logic in data, not model-written code.",
+    "Renderer-agnostic: the same spec drives web, email, PDF, OG-image, video; relevant for producing client deliverables (proposal PDF, OG images) from the same SiteDefinition.",
+    "Apache-2.0, actively maintained by Vercel Labs, TypeScript-native, Zod-native: zero runtime mismatch with our stack."
+  ],
+  "weaknesses": [
+    "Designed for app UIs (dashboards, forms) with generic layout primitives (Stack, Card, Grid); it has no notion of section families, composition, rhythm, art direction, asset constraints or eligibility. Using its shadcn catalogue would produce exactly the generic output we exist to avoid.",
+    "The renderer packages are client-runtime oriented (React/Vue/Svelte). There is no Astro renderer; our output must be static HTML with islands, so we would use only core at build time and write our own Astro emitter.",
+    "The model still emits the whole spec (which components, which props). In our pipeline the model must only pick ids from pre-computed eligible sets; json-render's prompt() would need heavy customisation to express 'choose from these 4 variants for beat 3' rather than 'compose freely from the catalogue'.",
+    "Strict JSON Schema mode cannot express record/map types; our slot bindings and fact queries are maps, so we would flatten them.",
+    "Streaming progressive render is irrelevant for a build pipeline that renders after all gates pass; the complexity (patch stream, state store) is dead weight for us."
+  ],
+  "patterns_to_steal": [
+    "Catalogue-compiles-to-{prompt, strict JSON schema, validator} -> our three constrained decision calls (creative direction, beat selection, arrangement): generate the enum-constrained schema per build from the eligible set, so the model literally cannot name an ineligible id.",
+    "Flat elements map with stable ids -> SiteDefinition sections and slots keyed by stable instance ids (section_instance_id already exists in the telemetry contract); makes manifests, patches and the post-V1 editor trivial.",
+    "Machine-readable validation codes -> our assembly/anti-slop violations should be typed codes (no_focal_moment, rhythm_profile_breach) that drive substitution-based repair, not prose.",
+    "Edit modes (RFC 6902 patch) for refinement -> the client-facing 'change this section' flow post-launch: model emits patches against SiteDefinition, gates re-run on the patched doc.",
+    "@json-render/image (Satori) -> OG image generation from SiteDefinition data; react-pdf -> gate report / proposal PDF from the same source."
+  ],
+  "patterns_to_avoid": [
+    "Free composition from a generic catalogue (Stack/Card/Grid) -> this is the 'Hero 1/2/3' problem; the model must select whole authored arrangements, never compose primitives.",
+    "Streaming spec with live state store -> unnecessary for a build-then-gate pipeline; adds client JS against a 180 kB budget.",
+    "Model-authored visible/state logic in marketing sites -> interactive state belongs in authored islands, not model-emitted conditions."
+  ],
+  "reusable_patterns": [
+    "SchemaTriad: one typed catalogue definition emits prompt, JSON Schema and runtime validator so they cannot drift.",
+    "FlatIdDocument: documents as {root, elements: Record<id, node>} rather than nested trees, enabling patches, stable refs and streaming.",
+    "TypedValidationCodes: structural validation returns machine codes that feed an automated repair loop.",
+    "PatchRefinement: edits to an existing document are expressed as RFC 6902/7396 operations chosen by the model, never full regeneration.",
+    "MultiTargetRender: the same spec renders to web, PDF, email, OG image via target-specific renderers."
+  ],
+  "adoption_strategy": "Adapt. Do not adopt the renderers or the shadcn catalogue. Take @json-render/core's SchemaTriad idea and re-implement it thinly (a few hundred lines of Zod + JSON-schema generation) around our own SiteDefinition, so each constrained model call receives a per-build strict schema whose enums are exactly the eligible ids. Consider directly depending on @json-render/core only if its defineCatalog proves flexible enough to express per-beat enum sets; otherwise the pattern is more valuable than the package. Evaluate @json-render/image for OG images.",
+  "recommendation": "Adapt",
+  "novelty_score": 7,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": ["creative_direction", "beat_selection", "arrangement", "renderer", "decision_manifest", "visual_editor", "seo_og_images"],
+  "evidence": [
+    "packages/core/src/schema.ts: Catalog interface with prompt(), jsonSchema({strict}), validate(), zodSchema()",
+    "packages/core/src/spec-validator.ts: SpecIssue codes missing_root, missing_child, orphaned_element, visible_in_props, repeat_state_mismatch",
+    "packages/core/src/visibility.ts: declarative $state/$item/$index conditions with strict Zod",
+    "packages/core/src/edit-modes.ts: patch (RFC 6902) / merge (RFC 7396) / diff edit modes with prompt instructions",
+    "packages/core/src/prompt.ts: buildUserPrompt with refinement mode and streaming instruction",
+    "README.md package table: core, react, vue, svelte, solid, next, remotion, react-pdf, react-email, image, codegen, mcp, yaml"
+  ]
+}

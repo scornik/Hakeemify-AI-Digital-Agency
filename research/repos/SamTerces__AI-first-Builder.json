@@ -1,0 +1,57 @@
+{
+  "repo": "SamTerces/AI-first-Builder",
+  "url": "https://github.com/SamTerces/AI-first-Builder",
+  "category": "ai-website-builders",
+  "license": "MIT (LICENSE file; GitHub reports NOASSERTION because of an appended attribution clause crediting Ratna-Babu/Ai-Website-Builder)",
+  "stars": 11,
+  "last_push": "2026-07-23",
+  "status_note": "active but non-functional: all three AI routes (gen-ai-code, ai-chat, enhance-prompt) are stubbed to HTTP 503 with a 'ponytail: AI generation disabled' comment; derivative of Ratna-Babu/Ai-Website-Builder (same package name project_doomsday, same file layout, LICENSE credits it)",
+  "core_problem": "Chat-to-React-site tutorial clone: user types a prompt, the model returns a JSON map of Vite/React files, Sandpack renders them in the browser, JSZip exports them. In this fork the actual model calls have been removed.",
+  "architecture": "Next.js 15 App Router (JS, not TS). data/Prompt.jsx holds three string prompts (CHAT_PROMPT persona, CODE_GEN_PROMPT, ENHANCE_PROMPT_RULES). components/custom/CodeView.jsx builds the request as `JSON.stringify(messages) + Prompt.CODE_GEN_PROMPT` (entire chat history serialised as a JSON string and concatenated to the instructions, composed on the client) and POSTs to app/api/gen-ai-code/route.jsx, which now returns 503. The expected contract is a JSON object {projectTitle, explanation, files:{'/App.js':{code}}, generatedFiles[]}; the client reads SSE 'data:' lines, takes `finalData.files`, runs preprocessFiles (coerces strings/objects into {code}) and shallow-merges over Lookup.DEFAULT_FILE (public/index.html with cdn.tailwindcss.com, App.css, tailwind.config.js, postcss.config.js) with no validation. Preview is @codesandbox/sandpack-react template 'react' with externalResources ['https://cdn.tailwindcss.com'] and a customSetup.dependencies list (Lookup.DEPENDANCY) that includes firebase, @google/generative-ai, MUI, react-toastify, three uuid packages. Persistence is Convex with schema `workspace: {messages: v.any(), fileData: v.optional(v.any())}` (untyped blobs). Export writes the same files plus a synthesized package.json into a zip. Repo also commits .omc/ agent state, a vexp AGENTS.md, and a PERFORMANCE_IMPROVEMENTS.md about useCallback/dynamic imports.",
+  "core_innovation": "None; it is a de-wired copy of a YouTube-tutorial Bolt clone whose only distinguishing artifact is a prompt that spells out the canonical AI-slop aesthetic as requirements.",
+  "strengths": [
+    "The CODE_GEN_PROMPT is an unusually explicit written specification of the generic AI look (indigo-500/purple-500/pink-500 gradients, backdrop-blur glassmorphism, rounded-2xl, shadow-xl, hover:scale-105 / -translate-y-1, gradient text headlines, lucide icons, framer-motion) and therefore a useful seed corpus for a tier-1 token ban list.",
+    "ENHANCE_PROMPT_RULES example output ('deep purple (#1a1a2e) backgrounds and vibrant gradient accents (indigo to pink)... glassmorphism cards... glowing input focus states... subtle particle effects') is a second, copy-level list of clichés to ban.",
+    "Sandpack-in-browser preview with a fixed dependency allowlist is a cheap, working preview mechanism for React output (mechanism is Sandpack's, not the repo's)."
+  ],
+  "weaknesses": [
+    "AI generation is disabled: every API route returns 503, so the repo cannot be run as described; README tells users to restore configs/AiModel.jsx from git history, which the shallow default branch no longer contains.",
+    "Output contract is an untyped JSON files map parsed on the client with no schema, no dependency check, no build check; any model drift (App.jsx vs App.js, missing files) reaches Sandpack as a red error overlay.",
+    "System prompt is assembled client-side and the whole message history is stringified into the prompt, so any user can rewrite the instructions and cost is unbounded by history length.",
+    "Prompt hardcodes the slop aesthetic as mandatory ('Use gradient backgrounds (e.g., from-indigo-500 via-purple-500 to-pink-500)', 'Add subtle glassmorphism effects', 'Card hover lift effects'), and instructs the model to use 'https://images.unsplash.com/photo-[id]?w=800' URLs, which yields hallucinated photo ids and broken images.",
+    "Convex schema stores messages and files as v.any(); no versioning, no lineage, no telemetry.",
+    "Dependency hygiene: jszip and jzip, uuid + uuidv4 + uuid4, MUI alongside Tailwind, firebase and @google/generative-ai injected into every exported project's package.json.",
+    "Committed tooling residue (.omc state, .vscode/mcp.json, vexp AGENTS.md) indicates an agent-edited repo with no review; 11 stars, single author."
+  ],
+  "patterns_to_steal": [
+    "Prompt text as ban-list corpus: harvest the literal class tokens and phrases from CODE_GEN_PROMPT and the ENHANCE example ('from-indigo-500 via-purple-500 to-pink-500', 'backdrop-blur', 'glassmorphism', 'hover:scale-105', 'hover:-translate-y-1', 'gradient text', 'particle effects', 'glowing', 'floating geometric shapes') → anti_slop tier-1 regex/token bans and tier-3 n-gram seed list.",
+    "Fixed dependency allowlist passed to the sandbox (Lookup.DEPENDANCY → Sandpack customSetup) → qa_gate: our Astro build should fail on any import outside a pinned allowlist, which is the deterministic version of this idea."
+  ],
+  "patterns_to_avoid": [
+    "Client-composed system prompt with serialised chat history appended → prompt injection, unbounded token cost, and no server-side control of what the model is told; our pipeline keeps prompts server-side and the model only selects ids.",
+    "Untyped JSON files map as the AI-to-renderer contract → no Zod validation possible, no way to detect truncation or missing files; contradicts SiteDefinition typed contract.",
+    "Aspirational and aesthetic-prescriptive prompting ('visually stunning', 'impress users immediately', mandatory gradients/glassmorphism) → already rejected; this repo shows exactly what it produces.",
+    "Model-invented image URLs (unsplash photo-[id]) → violates asset_constraints on real photos; hallucinated ids render as broken images in front of a client.",
+    "v.any() persistence with no generation lineage → no telemetry, no priors promotion, no reproducibility."
+  ],
+  "reusable_patterns": [
+    "SlopLexiconHarvest: mine tutorial-grade generation prompts for the literal utility classes and adjectives they mandate and turn them into a ban list.",
+    "SandboxDependencyAllowlist: preview environment is given a fixed, pinned dependency set so anything the model imports outside it fails loudly at preview time.",
+    "ScaffoldMergeDefaults: deterministic scaffold files are shallow-merged under model output so boilerplate never depends on the model (weak here because model files can still overwrite scaffold)."
+  ],
+  "adoption_strategy": "Ignore. There is no running generation path, no validation, no typed contract, and the prompt is a textbook example of the aesthetic we are building a gate against. The only durable value is the prompt text itself as a lexicon of slop tokens for the anti-slop engine; copy those strings into the tier-1 ban list and move on. Do not use the Sandpack setup as a reference either; our renderer is Astro and preview is a static build, not an in-browser bundler.",
+  "recommendation": "Ignore",
+  "novelty_score": 0,
+  "difficulty_score": 1,
+  "pipeline_stages_affected": ["anti_slop"],
+  "evidence": [
+    "data/Prompt.jsx (CHAT_PROMPT, CODE_GEN_PROMPT with gradient/glassmorphism requirements and JSON files schema, ENHANCE_PROMPT_RULES with the purple-gradient example)",
+    "app/api/gen-ai-code/route.jsx, app/api/ai-chat/route.jsx, app/api/enhance-prompt/route.jsx (all return 503 'AI ... disabled in this deployment')",
+    "components/custom/CodeView.jsx (PROMPT = JSON.stringify(messages) + CODE_GEN_PROMPT; SSE parse of data.final.files; preprocessFiles; SandpackProvider with externalResources cdn.tailwindcss.com; JSZip export)",
+    "data/Lookup.jsx (DEFAULT_FILE scaffold, DEPENDANCY list including firebase and @google/generative-ai)",
+    "convex/schema.js (workspace.messages v.any(), fileData v.any())",
+    "LICENSE (MIT plus 'This product includes software originally licensed under MIT from: Ratna-Babu/Ai-Website-Builder')",
+    "README.md note that AI generation is disabled and must be restored from git history",
+    "package.json (name project_doomsday, jszip+jzip, uuid+uuidv4)"
+  ]
+}

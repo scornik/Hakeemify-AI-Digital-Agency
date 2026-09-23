@@ -1,0 +1,68 @@
+{
+  "repo": "frdel/agent-zero",
+  "url": "https://github.com/frdel/agent-zero",
+  "category": "agents",
+  "license": "MIT (LICENSE file is MIT, copyright Agent Zero s.r.o.; GitHub metadata reports 'Other/NOASSERTION' because of the custom header)",
+  "stars": 19240,
+  "last_push": "2026-09-23",
+  "status_note": "active; redirects to agent0ai/agent-zero. Very high commit velocity; ships as a Docker image with a web UI, plugin system and many integrations (Telegram, WhatsApp, email, TTS/STT).",
+  "core_problem": "A general-purpose personal agent whose entire behaviour is defined by editable markdown prompt files and Python extension hooks rather than hard-coded logic, running in a Docker container with hierarchical subordinate agents, vector memory and a web UI.",
+  "architecture": "agent.py (1.6k lines): AgentContext (per chat; holds agent0, log, task, intervention routing) and Agent with the `monologue()` loop: for each iteration it runs extension points (monologue_start, message_loop_start, message_loop_prompts_before/after, before_main_llm_call, response_stream*, reasoning_stream*, message_loop_result, message_loop_end, monologue_end), builds the system prompt from prompt files, streams the model, extracts a JSON tool request (helpers/extract_tools), validates and executes the tool, and appends results to history; `handle_intervention()` is checked between every step so a user message can interrupt any running loop and is broadcast down the subordinate chain. Prompts: prompts/ holds 82 markdown files (agent.system.main.md composes role/specifics/environment/communication/solving/tips via `{{ include \"file.md\" }}`; fw.*.md are framework messages such as fw.msg_repeat.md, fw.msg_misformat.md, fw.msg_unusable_response_limit.md, fw.intervention.md; agent.system.tool.*.md document each tool). helpers/files.py `read_prompt_file`/`process_includes` resolve a file through an ordered list of directories (agent profile prompts dir first, then base prompts), support `{{include original}}` to pull the lower-priority version of the same file (override-and-extend), and inject kwargs into templates. Agent profiles: agents/<name>/agent.yaml (title, description, context) + agents/<name>/prompts/ overriding only the files they change (developer/, researcher/, hacker/, tiny-local/, agent0/, default/), plus optional per-profile tools/ and extensions/. Extensions: extensions/python/<hook_point>/_NN_name.py, discovered by helpers/extension.py, sorted by numeric prefix, each a class with async execute(); @extension.extensible wraps core methods so plugins can replace them; 30+ hook points including system_prompt (_10_main_prompt, _11_tools_prompt, _13_skills_prompt, _14_project_prompt), message_loop_prompts_after (_60_include_current_datetime, _63_recall_relevant_skills, _65_include_loaded_skills...), tool_execute_before/after, message_loop_result (_20_empty_response counts consecutive unusable responses against settings.max_consecutive_unusable_responses and raises HandledException at the limit; _30_repeat_response detects a response identical to the previous one and injects fw.msg_repeat.md). Plugins: plugins/_<name>/ (40 of them: _memory, _time_travel, _chat_branching, _chat_compaction, _orchestrator, _goal, _tool_access, _context_window, _error_retry, _plugin_validator...) bundle tools+extensions+webui panels; extensions/webui/ mirrors hook points for the front end. Tools: tools/*.py classes with a sidecar .dox.md; call_subordinate.py spawns a child Agent (number+1) with its own profile, parallel.py runs jobs concurrently, skills_tool.py loads SKILL.md folders (skills/), scheduler.py for cron-like tasks. Memory: FAISS via helpers/vector_db.py (plugin _memory), areas main/fragments/solutions/instruments; recall and memorize are extensions run at prompt time and monologue end. Runtime: docker/run (Dockerfile, docker-compose.yml, fs/ overlay) runs the whole agent + code execution in one container; run_ui.py Flask web UI with websocket. Python only; no structured-output schema enforcement (tool JSON parsed leniently, misformat -> warning prompt).",
+  "core_innovation": "Behaviour-as-files: the agent has no hard-coded persona or procedure; a layered directory of markdown prompt fragments (with include/override semantics) plus numbered hook-point extension scripts fully define what the agent is, so a 'new agent' is a directory diff.",
+  "strengths": [
+    "Prompt layering with directory precedence and `{{include original}}` gives override-and-extend semantics for behaviour files, diffable and versionable in git.",
+    "Hook points with numeric-ordered scripts are a simple, discoverable plugin model (drop a file in a folder); no registry code to edit.",
+    "Intervention checked between every loop step: a human can redirect a running agent (and its subordinates) at any time.",
+    "Concrete loop-health heuristics: repeated-identical-response detection and a consecutive-unusable-response limit, both configured in settings and expressed as prompt files.",
+    "Agent profiles (agent.yaml + prompt overrides) demonstrate cheap specialisation without code.",
+    "Skills (SKILL.md folders) recalled by relevance at iteration 0 only, keeping the system prompt small."
+  ],
+  "weaknesses": [
+    "Python, Flask, FAISS, Docker-everything; the product is a personal assistant, not a library; there is no importable orchestration core.",
+    "No structured-output validation: tool requests are JSON parsed leniently and misformats become a prompt warning; no schema, no retry contract.",
+    "No cost budget, no iteration cap in the core loop (only the unusable-response limit and repeat detection), no checkpoints (the _time_travel and _chat_branching plugins branch chat history, not a typed state).",
+    "Memory is embedding-based with LLM-written summaries; no provenance.",
+    "Behaviour files are free-form prose that the model may or may not follow; correctness is not enforced by code, which is exactly the gap our 'constraint not generation' principle closes.",
+    "Extreme velocity and plugin sprawl (40 plugins, integrations for messaging apps) make the core harder to audit; security-review/ folder and _infection_check plugin hint at the attack surface of an agent that runs shell commands."
+  ],
+  "patterns_to_steal": [
+    "Ordered-directory prompt resolution with `{{ include \"x\" }}` and `{{include original}}` -> niche playbooks and copy-generation prompts: a base prompt directory plus per-niche and per-archetype override directories, resolved by precedence, so a playbook overrides only the fragments it changes and can still include the base text; every fragment is a versioned file reviewed in PRs.",
+    "Numbered hook-point scripts (`<hook>/_NN_name`) -> anti_slop and qa_gate: implement tier-1 bans and QA checks as ordered files in `gates/anti_slop/_10_regex_bans.ts`, `_20_token_bans.ts`, `_30_layout_bans.ts`, discovered and run in order; adding a rule is adding a file.",
+    "Agent profile = agent.yaml + prompt overrides -> page archetypes and positioning: each archetype/positioning pair is a small YAML plus prompt-fragment overrides, not a code branch.",
+    "Repeat-response and consecutive-unusable-response counters expressed as settings -> the constrained model calls: identical selection twice or N unparsable outputs terminates the call and triggers the deterministic fallback.",
+    "Skill recall only at iteration 0 with a small limit -> creative_direction prompt: inject at most k relevant playbook fragments by keyword match, never the whole library."
+  ],
+  "patterns_to_avoid": [
+    "Free-form prose behaviour files as the correctness mechanism -> our behaviour is enforced by predicates, Zod schemas and gates; prompt files only shape the constrained selections.",
+    "Hierarchical subordinate agents that delegate via natural language (call_subordinate) -> our fan-out is code-driven per section, not agent-to-agent delegation.",
+    "FAISS memory with LLM-written summaries -> FactRegistry with provenance is the memory.",
+    "Single container running agent + shell + browser with a web UI -> our model never executes commands; sandboxing is for Playwright/Lighthouse jobs only."
+  ],
+  "reusable_patterns": [
+    "LayeredPromptDirectories: prompt fragments resolve through an ordered directory list with include and include-original semantics for override-and-extend.",
+    "NumberedHookScripts: extension behaviour is a folder per hook point containing ordered scripts discovered at load time.",
+    "ProfileAsOverlay: a named profile is a YAML descriptor plus a sparse overlay of files that override defaults.",
+    "InterventionCheckpoint: the loop polls for a human intervention between every step and propagates it to child processes.",
+    "UnusableResponseBudget: consecutive unparsable or repeated outputs are counted and terminate the loop at a configured limit."
+  ],
+  "adoption_strategy": "Adapt. Do not run agent-zero; copy two file-system conventions into the Astro/TS repo: (1) a prompt/playbook loader that resolves `{{ include }}` and `{{ include original }}` across ordered directories (base -> niche -> archetype), so playbooks are sparse overlays reviewed as diffs (this is roughly 80 lines of TS plus Zod frontmatter validation), and (2) numbered, folder-discovered gate scripts for the anti-slop and QA tiers. Copy the repeat/unusable counters into the constrained-call wrapper. Everything else (subordinate agents, FAISS memory, Docker-in-one, web UI, plugins) is out of scope. A full agent framework is not warranted; agent-zero is evidence that even open-ended agents end up governed by versioned files plus a handful of loop-health counters.",
+  "recommendation": "Adapt",
+  "novelty_score": 5,
+  "difficulty_score": 2,
+  "pipeline_stages_affected": [
+    "research",
+    "creative_direction",
+    "copy_generation",
+    "anti_slop",
+    "qa_gate",
+    "agent_orchestration"
+  ],
+  "evidence": [
+    "LICENSE (MIT, Agent Zero s.r.o.)",
+    "agent.py (AgentContext, Agent.monologue loop with extension.call_extensions_async at monologue_start/message_loop_start/before_main_llm_call/message_loop_result/message_loop_end/monologue_end; handle_intervention; read_prompt/parse_prompt)",
+    "prompts/agent.system.main.md ({{ include }} composition), prompts/fw.msg_repeat.md, fw.msg_misformat.md, fw.msg_unusable_response_limit.md, fw.intervention.md (82 files)",
+    "helpers/files.py process_includes/read_prompt_file ({{include original}}, ordered directories, _get_dirs_after)",
+    "helpers/extension.py (@extensible, call_extensions_async, _get_extensions sorted by file name), extensions/python/<hook>/_NN_*.py (system_prompt/_10_main_prompt.py ... message_loop_prompts_after/_63_recall_relevant_skills.py, message_loop_result/_20_empty_response.py [max_consecutive_unusable_responses], _30_repeat_response.py)",
+    "agents/developer/agent.yaml + agents/*/prompts overrides; plugins/ (40 dirs incl. _memory, _time_travel, _chat_branching, _orchestrator); tools/call_subordinate.py, parallel.py, skills_tool.py; skills/*/SKILL.md; helpers/vector_db.py (FAISS); docker/run/Dockerfile + docker-compose.yml"
+  ]
+}

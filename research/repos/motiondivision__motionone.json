@@ -1,0 +1,48 @@
+{
+  "repo": "motiondivision/motionone",
+  "url": "https://github.com/motiondivision/motionone",
+  "category": "motion",
+  "license": "MIT",
+  "stars": 2867,
+  "last_push": "2024-11-12",
+  "status_note": "ARCHIVED (read-only). Motion One (motion@10.x) was merged into motiondivision/motion; the vanilla `motion` package (v11+, now v13.4.1) and `motion/mini` are its successors.",
+  "core_problem": "A tiny animation library that drives the browser's Web Animations API (WAAPI) directly so transforms/opacity run off the main thread, with a minimal polyfill for what WAAPI lacks.",
+  "architecture": "Lerna/Turbo monorepo: @motionone/animation (minimal WAAPI polyfill/JS fallback), @motionone/dom (animate, timeline, scroll, inView, resize, spring/glide via @motionone/generators), @motionone/easing, @motionone/types, @motionone/utils, and the umbrella `motion` package (v10.18.0) that re-exports dom + animation. packages/dom/package.json carried a bundlesize gate: animate 4.1 kB, animateStyle 3.4 kB, timeline 4.82 kB, spring 1.5 kB, inView 0.45 kB, scroll 2.51 kB (gzipped). inView() wrapped IntersectionObserver; scroll() tracked scroll position with a lightweight rAF-on-scroll approach. Thin @motionone/react/solid/vue wrappers existed and were later dropped.",
+  "core_innovation": "Treat WAAPI as the engine and ship only the delta the browser is missing, giving a ~4 kB animate() with compositor-thread transforms.",
+  "strengths": [
+    "Proved the WAAPI-first approach (compositor-run opacity/transform, near-zero main-thread cost) at ~4 kB - the model that `motion/mini` (measured 4.4 kB gz) still implements.",
+    "Per-feature bundlesize budgets in package.json as a CI gate - the same discipline our 180 kB budget needs.",
+    "MIT."
+  ],
+  "weaknesses": [
+    "Archived; no fixes since 2024-11; 66 open issues frozen.",
+    "Its successor's default `animate()` (from 'motion') is no longer tiny (measured 22 kB gz) because the hybrid engine merged in Framer Motion's JS spring/keyframe resolver; only `motion/mini` keeps the Motion One footprint.",
+    "WAAPI cannot animate layout, SVG path data or non-CSS values natively; the JS fallback was limited."
+  ],
+  "patterns_to_steal": [
+    "Per-entry bundlesize maxSize map in package.json -> add a size-limit gate per motion effect bundle in our CI so each allowlisted pattern has a declared byte cost -> qa_gate / motion.",
+    "WAAPI-first: only animate opacity/transform/clip-path so animations are compositor-threaded -> hard rule in the motion profile: allowlisted patterns may only touch compositor properties -> anti_slop / motion."
+  ],
+  "patterns_to_avoid": [
+    "Depending on the archived motion@10 packages -> unmaintained; use `motion/mini` instead."
+  ],
+  "reusable_patterns": [
+    "PlatformFirstPolyfill: use the native API (WAAPI) as the engine and ship only the missing capabilities.",
+    "SizeBudgetPerEntry: each public entry point has a gzipped byte ceiling enforced in CI."
+  ],
+  "adoption_strategy": "Ignore (archived). Its ideas survive in `motion/mini`; evaluate that under motiondivision/motion. Keep the per-entry bundlesize gate idea.",
+  "recommendation": "Ignore",
+  "novelty_score": 5,
+  "difficulty_score": 1,
+  "pipeline_stages_affected": [
+    "motion",
+    "qa_gate"
+  ],
+  "evidence": [
+    "raw/motiondivision_motionone/meta.json (archived:true, pushed 2024-11-12, MIT)",
+    "raw/motiondivision_motionone/README.md (package list)",
+    "gh api packages/motion/package.json (v10.18.0, deps on @motionone/*)",
+    "gh api packages/dom/package.json bundlesize array (animate 4.1 kB, inView 0.45 kB, scroll 2.51 kB, timeline 4.82 kB, spring 1.5 kB)",
+    "motiondivision/motion packages/motion/src/mini.ts -> 'framer-motion/dom/mini' (successor entry)"
+  ]
+}

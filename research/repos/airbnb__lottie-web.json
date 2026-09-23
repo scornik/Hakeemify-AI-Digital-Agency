@@ -1,0 +1,63 @@
+{
+  "repo": "airbnb/lottie-web",
+  "url": "https://github.com/airbnb/lottie-web",
+  "category": "motion",
+  "license": "MIT",
+  "stars": 32118,
+  "last_push": "2025-09-01",
+  "status_note": "maintenance mode: last version 5.13.0 (commit 2024-11-19), 857 open issues, no GitHub releases; the format's momentum moved to LottieFiles' dotLottie (@lottiefiles/dotlottie-web, Rust/WASM ThorVG renderer)",
+  "core_problem": "Play Adobe After Effects compositions exported as Bodymovin JSON in the browser via SVG, canvas or hybrid HTML renderers, so designers ship motion without hand-coding it.",
+  "architecture": "Rollup builds from player/js/modules/*.js entry files that register renderers/modifiers/effects into a singleton (renderersManager.registerRenderer, ShapeModifiers.registerModifier, registerEffect): full.js registers svg+canvas+html renderers, all shape modifiers, the expressions engine and SVG effects (lottie.min.js 305.7 kB / 76.6 kB gz); svg_light.js registers only SVGRenderer + shape modifiers, no expressions/effects (lottie_light.min.js 168.4 kB / 46.7 kB gz; esbuild import measured 49.1 kB gz); also lottie_svg, lottie_canvas, lottie_light_canvas, lottie_light_html and lottie_worker/canvas_worker builds (OffscreenCanvas in a worker). Runtime: AnimationManager keeps one requestAnimationFrame loop for all AnimationItems (resume() re-schedules while playingAnimationsNum>0 and not frozen); AnimationItem parses the JSON (dataManager.loadAnimation, optional autoloadSegments/progressiveLoad), builds an element tree (elements/, mask.js, EffectsManager) and renders per frame; SVGRendererBase creates the <svg> with preserveAspectRatio and clipPath; rendererSettings expose title/description (index.d.ts lines 105-108) which are written as <title>/<desc> for basic a11y. No prefers-reduced-motion handling anywhere in player/js; no IntersectionObserver pausing (offscreen animations keep ticking unless the page calls pause()). JSON schema is Bodymovin's; `.lottie` (dotLottie = zip of JSON + assets + manifest) is not supported by this repo - it needs @lottiefiles/dotlottie-web (0.80.0, MIT, WASM: measured index.js 165 kB/33 kB gz plus a WASM binary).",
+  "core_innovation": "A faithful runtime reimplementation of After Effects' layer/shape/mask/expression model in JS so a designer-authored composition renders as live vector DOM.",
+  "strengths": [
+    "Lets a curated, human-made illustration/icon system carry motion (authored in AE, checked into the asset library) - consistent with 'illustration systems are selected, not generated'.",
+    "SVG renderer output is real DOM: it scales, can be styled, and can carry <title>/<desc> via rendererSettings.",
+    "lottie_light removes expressions and effects (the parts that are slow and eval-like) and halves the size.",
+    "MIT; the Bodymovin JSON format is a de-facto standard with an open ecosystem (LottieFiles, dotLottie, ThorVG, Rive as a competitor)."
+  ],
+  "weaknesses": [
+    "Bundle cost: even lottie_light is ~47 kB gz (26% of the 180 kB budget) plus the JSON payloads (tens to hundreds of kB each) for what are usually decorative icon loops; dotlottie-web trades JS for a WASM binary and canvas (no DOM).",
+    "Main-thread cost: JS re-computes every layer every frame and mutates hundreds of SVG nodes; complex AE files (masks, mattes, repeaters) routinely blow a 120 ms budget and cause layout/paint storms - the worker build only helps canvas.",
+    "No reduced-motion support and no offscreen pausing built in; the pipeline must wrap it (matchMedia -> autoplay:false + goToAndStop, IntersectionObserver -> pause/play).",
+    "Maintenance risk: last code change 2024-11, 857 open issues, Airbnb's own attention is on native Lottie; the web ecosystem is moving to LottieFiles' dotLottie/ThorVG.",
+    "Lottie assets are the archetypal 'stock animated illustration' slop (generic blob people, floating icons, checkmark loops); free LottieFiles marketplace assets are exactly the generated/AI-ish look the art-direction layer forbids.",
+    "Expressions engine in the full build evaluates AE expression code (JS strings) at runtime - a security/perf smell for third-party JSON."
+  ],
+  "patterns_to_steal": [
+    "Renderer/modifier/effect registration split into build entries (full vs svg_light) -> same idea for our effect registry: a 'light' motion runtime entry that excludes anything not in the pattern_allowlist -> motion / renderer.",
+    "rendererSettings.title/description a11y hooks -> if any Lottie asset is allowed, the art_direction asset record must carry alt text that is injected as <title>/<desc> and validated by the placeholder scan -> art_direction / qa_gate.",
+    "Single shared rAF loop with playingAnimationsNum gating (AnimationManager) -> our runtime should stop its ticker when no allowlisted animation is active -> motion."
+  ],
+  "patterns_to_avoid": [
+    "Shipping lottie-web for hero illustrations or icon micro-animations -> 47-77 kB gz + JSON + per-frame DOM mutation for decoration; violates JS and main-thread budgets and reads as stock.",
+    "Full build with expressions -> runtime evaluation of AE expression code and largest bundle; never.",
+    "Autoplaying infinite loops (the LottieFiles default) -> infinite decorative motion is a WCAG 2.2.2 pause/stop issue and a slop idiom.",
+    "Sourcing assets from LottieFiles marketplace -> generic illustration style is precisely what the art-direction rule excludes; assets must be commissioned per illustration system."
+  ],
+  "reusable_patterns": [
+    "BuildEntryFeatureRegistration: features registered into a singleton by separate entry modules so bundles are composed by entry, not flags.",
+    "SharedTickerWithActiveCount: one rAF loop that self-stops when the count of playing items reaches zero.",
+    "DesignerAuthoredMotionAsset: motion authored in a design tool and shipped as data, selected by id rather than generated."
+  ],
+  "adoption_strategy": "Ignore for V1. Nothing in the eight section families requires AE-authored motion, and the cost (>=47 kB gz + JSON + main-thread SVG mutation, no reduced-motion support) fails both budgets. If an illustration system later includes authored micro-motion, prefer (a) static SVG with CSS keyframes on <=3 compositor properties, or (b) a pre-rendered poster + short WebM/AVIF sequence, or (c) dotlottie-web canvas in a client:visible island with matchMedia-gated autoplay - as an art-direction asset selected by id, never a stock LottieFiles file.",
+  "recommendation": "Ignore",
+  "novelty_score": 5,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": [
+    "motion",
+    "art_direction",
+    "qa_gate"
+  ],
+  "evidence": [
+    "raw/airbnb_lottie-web/meta.json (857 open issues, pushed 2025-09-01), package.json (5.13.0, main build/player/lottie.js), README.md",
+    "gh api build/player listing with byte sizes (lottie.min.js 305,704; lottie_light.min.js 168,394; lottie_svg.min.js 242,630; worker builds)",
+    "rollup.config.js (entry -> output map, navigator/document guards)",
+    "player/js/modules/full.js vs svg_light.js (registerRenderer/registerModifier/registerEffect/setExpressionsPlugin)",
+    "player/js/animation/AnimationManager.js lines 9, 57-62, 100-116, 188-190 (playingAnimationsNum, resume/first rAF loop, _isFrozen)",
+    "player/js/animation/AnimationItem.js (isPaused, autoloadSegments, setSubframe; no matchMedia/reduced-motion)",
+    "player/js/renderers/SVGRendererBase.js line 77 (preserveAspectRatio), 88-89 (clipPath)",
+    "index.d.ts lines 105-108, 132-138 (rendererSettings title/description/progressiveLoad/hideOnTransparent)",
+    "commits list (last: 2024-11-19 'version 5.13.0'); unpkg gzip measurements for lottie_light/lottie/lottie_svg and @lottiefiles/dotlottie-web@0.80.0 (exports incl. dotlottie-player.wasm)",
+    "esbuild e_lottie_light measurement (scratchpad/bundle)"
+  ]
+}

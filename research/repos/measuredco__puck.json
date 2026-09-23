@@ -1,0 +1,79 @@
+{
+  "repo": "measuredco/puck",
+  "url": "https://github.com/puckeditor/puck",
+  "category": "visual-editors",
+  "license": "MIT",
+  "stars": 13354,
+  "last_push": "2026-09-21",
+  "status_note": "active (v0.23.0, 2026-08). GitHub org redirected measuredco -> puckeditor; npm package renamed @measured/puck -> @puckeditor/core. Core editor + renderer are MIT and fully in-repo. 'Puck AI' (@puckeditor/plugin-ai + @puckeditor/cloud-client) is NOT in the repo: it is a closed npm client that proxies to cloud.puckeditor.com and needs a PUCK_API_KEY (SaaS boundary).",
+  "core_problem": "A React-only, config-driven page editor: you describe a component catalogue (Config) with typed fields per component, and Puck gives you a drag-and-drop editor that emits/consumes a plain JSON document (Data) which a separate <Render> turns back into React. You own the data; no backend.",
+  "architecture": "Two artefacts. (1) Config (packages/core/types/Config.tsx): components[name] = { render, label, defaultProps, fields, permissions, inline, resolveFields, resolveData, resolvePermissions, metadata } plus root and categories. Fields (types/Fields.ts) are a discriminated union: text, textarea, number, select, radio, richtext (tiptap), array (arrayFields, min/max), object (objectFields), external (fetchList/mapProp — async pickers), custom (render), slot (allow/disallow component lists). (2) Data (types/Data.tsx): { root: { props }, content: ComponentData[], zones?: Record<'parentId:zone', ComponentData[]> } with ComponentData = { type, props: { id, ...fields }, readOnly? }. Nested content now lives inside props via slot fields (WithDeepSlots<T> recursively rewrites Slot -> SlotComponent at render time); 'zones' (DropZone) is deprecated and lib/migrate.ts carries an ordered migrations array (root->root.props, zones->slots) with a migrateDynamicZonesForComponent escape hatch. Runtime: zustand store (store/index.ts) with slices for history, permissions, fields, nodes; a reducer (reducer/actions/*) with insert/move/reorder/remove/duplicate/replace/replaceRoot/set/setData/setUi/registerZone; a derived flat index PrivateAppState.indexes { nodes[id] -> { data, parentId, zone, path }, zones['parentId:zone'] -> { contentIds, type } } that every operation reads. Editor canvas is an iframe (AutoFrame, iframe.enabled/syncHostStyles); DraggableComponent stamps data-puck-component={id} on the rendered element and DropZone stamps data-puck-dropzone={zoneCompound}; lib/dom-selectors.ts and lib/get-selector-for-id.ts map DOM<->node. DnD is @dnd-kit 0.4 with a custom NestedDroppablePlugin, dynamic/directional collision detectors and 'fluid|static' behaviours. Inline editing: fields with contentEditable:true are swapped at render by field-transforms (lib/field-transforms/default-transforms/inline-text-transform.tsx) for an <InlineTextField> (contentEditable='plaintext-only') that writes back with setDeep(props, propPath, value) + resolveAndReplaceData. Resolvers: resolveData(data, { changed, lastData, trigger: insert|replace|load|force|move, parent, root, metadata }) -> { props, readOnly } cached per id (lib/resolve-component-data.ts); resolveAllData (lib/resolve-all-data.ts, RSC-safe) walks root, content, slots and zones concurrently with a per-call cache; resolveFields for dynamic field sets; resolvePermissions (store/slices/permissions.ts) layers global -> component -> per-instance async permissions {drag, duplicate, delete, edit, insert, ...custom}. Rendering: components/Render (client) and components/ServerRender (exported at @puckeditor/core/rsc) are pure functions of (config, data) — no editor code — resolving slots via useSlots/SlotRenderPure. Extension: Plugin = { name, label, icon, render, overrides, fieldTransforms }; overrides (types/API/Overrides.ts: header, headerActions, fields, fieldLabel, fieldTypes, drawer, drawerItem, componentOverlay, outline, preview, iframe, actionBar, puck) are curried across plugins by lib/load-overrides.ts; usePuck/createUsePuck exposes appState, dispatch, history, getPermissions. History (store/slices/history.ts): debounced (250 ms) whole-AppState snapshots in histories[] with an index; back/forward dispatch {type:'set'}; InitialHistory prop seeds it; onAction(action, appState, prevAppState) hook. AI: recipes/next-ai wires createAiPlugin() in the browser to puckHandler() from @puckeditor/cloud-client on the server; 'assembly mode' only composes components from Config, 'design mode' lets the cloud generate new components which withDynamicConfig(config, data) merges into Config at render time.",
+  "core_innovation": "Treating the component catalogue as a typed Config where nested layout is just another field type (slot with allow/disallow), so the document stays a plain {type, props} tree that a stateless <Render> can rebuild anywhere, with async resolvers (data/fields/permissions) as the only side-effect surface.",
+  "strengths": [
+    "Config is a real 'catalogue the editor is constrained to': the palette, the fields, and per-slot allow/disallow lists (lib/data/is-component-allowed.ts, resolve-zone-constraints.ts) are all declared in one object; nothing outside Config can be inserted.",
+    "Data is minimal and renderer-agnostic in shape ({type, props{id}} tree) and the renderer is a pure function of (config, data) with an RSC-safe export (bundle/rsc.tsx) — it can be run at build time with no client JS.",
+    "Three-layer permissions (global -> component -> resolvePermissions per instance, async, cached on changed props) plus per-prop readOnly returned by resolveData: enough to lock structure and expose only copy/asset fields.",
+    "resolveData contract is well designed: 'changed' diff, 'trigger' enum, parent/root context, id-keyed cache, and an offline resolveAllData for publish-time hydration — a clean seam for a FactRegistry lookup.",
+    "Plugin/overrides API is composable (curried overrides across plugins) and already ships a heading-analyzer plugin (packages/plugin-heading-analyzer) that audits h1-h6 hierarchy inside the iframe — a template for QA-in-editor plugins.",
+    "Explicit data migration mechanism (lib/migrate.ts) with ordered migrations, and the 'assembly mode' concept in Puck AI proves the market wants AI constrained to a catalogue.",
+    "MIT, active, small core (5.4 MB clone), strong TypeScript generics (Config<Props>, UserGenerics) giving end-to-end prop typing from Config to render."
+  ],
+  "weaknesses": [
+    "Types only, no runtime schema: Config components is deliberately Record<string, any> (types/Config.tsx comment 'This _deliberately_ casts as any'); Data is never validated against Config at load; no version/$schema field on Data (migrations are inferred from shape).",
+    "React-only for both editor and renderer; sections must be React components for the canvas to render them. Our sections are Astro — the editor canvas cannot show them without either a React twin of every section or replacing the preview via overrides.preview/iframe (which loses DnD, since DnD relies on DraggableComponent wrapping each render).",
+    "Undo/redo is full-state snapshots debounced at 250 ms — coarse, memory-heavy for large documents, no operation semantics, cannot be replayed as an audit log.",
+    "Editor bundle is heavy: tiptap 3 (~20 packages), @dnd-kit, zustand, radix, happy-dom, object-hash, deep-diff — fine on an /edit route, unacceptable anywhere near the public page.",
+    "Fields are UI widgets, not constraints: 'text' has no maxLength/regex, 'select' options are untyped, no cross-field rules; resolveFields can implement them but imperatively.",
+    "Ongoing model churn (DropZone -> slot, root -> root.props) and an overrides API documented as 'highly experimental and likely to experience breaking changes'.",
+    "Puck AI (the interesting constrained-assembly part) is closed SaaS; the open repo only contains the plumbing to call it.",
+    "resolveData runs inside the editor on every prop change, encouraging network side-effects from field edits."
+  ],
+  "patterns_to_steal": [
+    "Config-as-catalogue with per-slot allow/disallow -> our section library's design_compat / Compat filter: generate a Puck-style Config from the Zod section variants so the post-V1 editor can only insert eligible variants into eligible slots.",
+    "Three-layer permissions + readOnly-per-prop -> visual_editor: lock drag/insert/delete globally, expose only copy, CTA text, image slot and alt text as editable; everything from the layout genome stays readOnly.",
+    "resolveData(changed, trigger, parent, root) with resolveAllData at publish -> cms/fact_registry: hydrate quotable facts and asset metadata from FactRegistry at publish time, mark them readOnly, and skip work unless 'changed' touches the fact reference.",
+    "Ordered migrations array (lib/migrate.ts) -> SiteDefinition versioning: keep a migrations[] keyed on schema version so playbook/section schema changes never strand stored sites.",
+    "Flat node/zone index derived from the tree (PrivateAppState.indexes) -> renderer/visual_editor: compute an id -> {parentId, slot, path} index once per SiteDefinition load; all editor ops address nodes by id, never by array position.",
+    "onAction(action, state, prevState) hook -> telemetry: emit typed editor actions as telemetry events for priors promotion (which variants owners keep vs. replace).",
+    "Heading-analyzer plugin pattern (query the preview iframe DOM, build outline, link back to node) -> qa_gate: run cheap DOM audits (heading order, missing alt, placeholder text) live in the editor before the Playwright/axe gate.",
+    "Field transforms (swap a prop value for an inline-editable node only in edit mode) -> visual_editor: inline copy editing over server-rendered output without changing section components."
+  ],
+  "patterns_to_avoid": [
+    "'Design mode' (AI generates new components on the fly, merged via withDynamicConfig) -> violates 'innovation is constraint, not generation'; only 'assembly mode' semantics are acceptable, and we implement them ourselves against the Zod catalogue.",
+    "Whole-state snapshot history -> we want inverse, serializable operations over SiteDefinition (see Onlook) so edits are auditable and replayable.",
+    "Free-form component render + free-form fields as the contract -> our sections carry requires/composition/motion/a11y metadata that Puck's ComponentConfig has no slot for; do not flatten SiteDefinition into a Puck Data document as the source of truth — project into it for the editor only.",
+    "Running the Puck editor as the site's runtime -> React + tiptap + dnd-kit would blow the 180 kB JS budget; the editor must live on a separate route and the public site must stay Astro static output.",
+    "TypeScript-only Data contract with no runtime validation -> keep Zod as the single validated contract; Puck types can be derived from it, never the reverse."
+  ],
+  "reusable_patterns": [
+    "CatalogueConfig: a single declarative object listing every insertable component, its typed fields, defaults and per-slot allow-lists, from which palette, forms and validation are all derived.",
+    "SlotAsField: nested content is a typed field of the parent node (props.children: Node[]) rather than a side table, so the document is one tree and the renderer needs no zone lookup.",
+    "LayeredPermissions: global -> per-type -> per-instance (async, cached on changed props) boolean capabilities resolved to a single Permissions object per node.",
+    "ChangedDiffResolver: async resolver receives (data, { changed, lastData, trigger }) and returns partial props + readOnly, cached by node id so expensive lookups run only when referenced props change.",
+    "OrderedDataMigrations: an array of pure (data, config) -> data migrations applied in sequence on load, each detecting the legacy shape it fixes.",
+    "EditModeFieldTransform: at render time in edit mode, substitute a prop value with an editable widget bound to the prop path; production render is untouched."
+  ],
+  "adoption_strategy": "Adapt — Do not adopt Puck as the runtime or as the source of truth, but it is the closest existing shape to 'a component catalogue the AI and the owner are constrained to'. Post-V1: generate a Puck Config from the Zod section library (zod -> Puck fields mapping; slot allow-lists from design_compat; permissions drag/insert/delete=false, readOnly on every genome prop) and project SiteDefinition into Puck Data for a copy/asset-editing session, then map edits back through Zod. For the canvas, evaluate overrides.preview pointing at an Astro dev-server iframe with our own data-section-id attributes (accept losing DnD, which we do not want owners to have anyway); if that proves awkward, keep only Puck's Fields/Outline plugins and write our own preview. Independently of the editor, copy the resolveData/resolveAllData, layered permissions and migrations patterns into the SiteDefinition tooling now.",
+  "recommendation": "Adapt",
+  "novelty_score": 5,
+  "difficulty_score": 4,
+  "pipeline_stages_affected": ["visual_editor", "renderer", "cms", "qa_gate", "fact_registry"],
+  "evidence": [
+    "packages/core/types/Config.tsx (ComponentConfigInternal: render/fields/permissions/resolveFields/resolveData/resolvePermissions; Config deliberately widened to Record<string, any>)",
+    "packages/core/types/Data.tsx (Data { root, content, zones? }, ComponentData { type, props{id}, readOnly? }, WithDeepSlots)",
+    "packages/core/types/Fields.ts (field union incl. SlotField allow/disallow, ExternalField fetchList, CustomField, RichtextField tiptap)",
+    "packages/core/types/API/index.ts (Permissions, Plugin, History/InitialHistory, OnAction, Slot), types/API/Overrides.ts (overrideKeys), types/Internal.tsx (PrivateAppState.indexes nodes/zones)",
+    "packages/core/store/slices/history.ts (debounced 250 ms AppState snapshots, back/forward via dispatch set) and store/slices/permissions.ts (global->component->resolvePermissions cache)",
+    "packages/core/lib/resolve-component-data.ts and lib/resolve-all-data.ts (trigger enum, changed diff, per-id cache, concurrent slot/zone resolution)",
+    "packages/core/lib/migrate.ts (ordered migrations: root->root.props, zones->slots)",
+    "packages/core/lib/dom-selectors.ts, lib/get-selector-for-id.ts, components/DraggableComponent/index.tsx:537 (data-puck-component), components/DropZone/index.tsx:508 (data-puck-dropzone)",
+    "packages/core/components/InlineTextField/index.tsx and lib/field-transforms/default-transforms/inline-text-transform.tsx (contentEditable plaintext-only + setDeep write-back)",
+    "packages/core/components/Render/index.tsx, components/ServerRender/index.tsx, bundle/rsc.tsx (pure renderer, RSC export)",
+    "packages/core/lib/load-overrides.ts (curried plugin overrides), lib/data/is-component-allowed.ts, lib/data/resolve-zone-constraints.ts",
+    "packages/core/package.json (deps: @dnd-kit 0.4, @tiptap 3, zustand 5, happy-dom; exports ./rsc)",
+    "recipes/next-ai/README.md, app/api/puck/[...all]/route.ts, app/puck/[...puckPath]/client.tsx (createAiPlugin, puckHandler, designMode, withDynamicConfig; PUCK_API_KEY to cloud.puckeditor.com); npm view @puckeditor/plugin-ai (0.8.3, not in repo packages/)",
+    "packages/plugin-heading-analyzer/src/HeadingAnalyzer.tsx (iframe DOM heading audit plugin)",
+    "apps/docs/pages/docs/api-reference/{permissions,plugin,overrides}.mdx, integrating-puck/{server-components,dynamic-props,feature-toggling}.mdx, CHANGELOG.md (0.23.0 2026-08-07)",
+    "raw/measuredco_puck/meta.json (full_name puckeditor/puck, MIT, 13354 stars, pushed 2026-09-21)"
+  ]
+}

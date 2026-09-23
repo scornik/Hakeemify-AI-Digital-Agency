@@ -1,0 +1,68 @@
+{
+  "repo": "aceternity/ui",
+  "url": "https://ui.aceternity.com",
+  "category": "ui-components",
+  "license": "Proprietary (free tier: copy-paste, no OSS license file; Pro 'End Product' license: commercial/client use allowed, no redistribution/marketplace resale of components or derivative component products)",
+  "stars": 0,
+  "last_push": "2026-09-23",
+  "status_note": "closed-source; analyzed from public catalogue (https://ui.aceternity.com/components) and the public shadcn-format registry at https://ui.aceternity.com/registry/{name}.json; the listed GitHub repo shadcnblocks/aceternity-ui is a 404 and no official source repo exists",
+  "core_problem": "Sells 'landing pages that look 100x better' by packaging eye-catching hero/background/text effects (beams, sparkles, lamp, aurora, 3D tilt) as copy-paste React + Tailwind + Motion components, monetised through a Pro block/template library.",
+  "architecture": "Distribution is a public shadcn-compatible registry: `https://ui.aceternity.com/registry.json` lists 284 items (112 `registry:ui`, 172 `registry:block`), each item JSON at `/registry/{name}.json` inlines `files[].content` (Pro blocks such as `github-globe` return HTTP 401). Items carry only `dependencies` and `files`; across 284 items there are zero `cssVars`, zero `tailwind` extensions and zero `css` blocks, so effects that rely on custom keyframes (`animate-aurora`, `animate-meteor-effect`, `animate-scroll`, `animate-spotlight`) ship without their keyframes and require the user to hand-paste Tailwind config from the docs page. Dependency profile: `motion` (framer-motion) in 169/284 items, `@tabler/icons-react` 69, `react-fast-marquee` 6, `three`/`@react-three/fiber`/`@react-three/drei` 3, `cobe` 2, `@tsparticles/*` 1, `simplex-noise` 2. Component anatomy from the sampled sources: `background-beams.tsx` is a `<motion.path>` over ~50 SVG path strings with `repeat: Infinity` and `duration: Math.random()*10+10` per path; `lamp.tsx` stacks two `conic-gradient` `motion.div`s plus four blurred layers (`blur-2xl`, `blur-md`, `blur-3xl`, `blur-2xl`) driven by five `whileInView` animations on hard-coded cyan; `aurora-background.tsx` layers six `repeating-linear-gradient`s with `blur-[10px]` and an `animate-aurora` class whose 60 s `background-position` keyframe is not in the item; `meteors.tsx` renders 20 absolutely positioned spans with `animate-meteor-effect`; `3d-card.tsx` uses React context + `onMouseMove` to set `rotateY(${x}deg) rotateX(${y}deg)` under `perspective: 1000px` with no touch or keyboard path; `sparkles.tsx` boots the tsparticles engine (`initParticlesEngine` + `loadSlim`, `fpsLimit: 120`) on a canvas; `vortex.tsx` runs its own `requestAnimationFrame` canvas loop with simplex noise; `infinite-moving-cards.tsx` clones the DOM list (`cloneNode`) and relies on an `animate-scroll` keyframe; `text-generate-effect.tsx` staggers per-word `filter: blur` with `stagger(0.2)`; `hero-highlight.tsx` tracks the pointer with `useMotionValue` into a radial `mask-image`. None of the 16 sampled items references `prefers-reduced-motion` or `useReducedMotion`. There is no theming layer: colours are literal Tailwind palette classes and hex stops (cyan-500, indigo-500, `#ffaa40`), not semantic tokens. The Pro tier (Annual $169, Lifetime $199, Team $1,590) adds 200+ blocks: hero, logo cloud, bento, CTA, testimonials, pricing, FAQ, navbar, footer, team, stats, and 'shaders' (dither, cloud, spotlight WebGL).",
+  "core_innovation": "None mechanically; its innovation is commercial: it productised a catalogue of hero-section spectacle effects and, by being the default 'make it look premium' library for AI builders, became the visual fingerprint of AI-generated landing pages.",
+  "strengths": [
+    "Registry-format distribution means the item list, dependency profile and source of every free effect are machine-readable, which makes building a slop-signature corpus trivial (284 item names + class/keyframe names).",
+    "A few effects are honest CSS: `aurora-background` (gradient + keyframe, 0 JS), `meteors` (spans + keyframe), `spotlight` (one SVG + keyframe), `bento-grid` (plain grid), `infinite-moving-cards` (CSS marquee) can be ported to zero-JS Astro if the visual is ever eligible.",
+    "The Pro block taxonomy (hero, logo cloud, CTA, testimonials, pricing, FAQ, stats, team, footer) is a reasonable checklist of marketing section families, useful only as a naming cross-check for our 8 families.",
+    "Consistent component anatomy (Container/Body/Item compound components, `className` passthrough, `cn()`) so effects compose with shadcn."
+  ],
+  "weaknesses": [
+    "Closed-source with a proprietary license: free items have no license file at all, and the Pro license forbids distributing the components or derivative component products; an agency pipeline that emits these components into many client sites is at best a grey area and cannot redistribute them in a versioned section library.",
+    "Motion/JS cost violates our budgets by construction: 169/284 items require `motion` (~40 kB gz), `sparkles` pulls tsparticles engine at 120 fps, `vortex`/`canvas-reveal`/`pixelated-canvas` run rAF canvas loops, `globe`/`3d-globe` need three.js + cobe/three-globe (WebGL), `background-beams` animates ~50 SVG paths forever on the main thread.",
+    "No reduced-motion handling in any sampled component (0/16), no poster/static fallback, no `visibility`-based pause when off-screen; hover-only interactions (3D card, direction-aware hover, glare) have no touch or keyboard equivalent.",
+    "Registry items omit `cssVars`/`tailwind`/`css`, so installs are incomplete (keyframes missing) and there is no token contract: colours are hard-coded palette classes and hex values, incompatible with design-system token selection.",
+    "Heavy blur stacking (`blur-3xl` layers, `backdrop-blur`, `mix-blend`) is GPU-expensive on mobile and is itself a slop signature.",
+    "The look is the AI-slop canon: beams, sparkles, lamp, aurora, meteors, spotlight, glowing borders, bento with skeletons, animated gradient text, typewriter/flip-words headlines, macbook-scroll mockups, globe; every one is a tier-1 ban candidate.",
+    "No versioning of items, no changelog per item, no semver; registry URL is `latest` only."
+  ],
+  "patterns_to_steal": [
+    "Machine-readable slop-signature corpus from the public registry (item names, `animate-*` class names, `motion`/`three`/`tsparticles` dependency fingerprints, `conic-gradient`+`blur-3xl` stacks, `#ffaa40`/`#9c40ff` style gradient stops) → anti_slop tier-1 regex/token bans and tier-3 n-gram detector training negatives.",
+    "Pro block taxonomy (hero, logo cloud, bento, CTA, testimonials, pricing, FAQ, stats, team, footer, navbar) → sanity cross-check that our 8 section families cover the commercially expected set; nothing else.",
+    "CSS-only mechanisms behind `aurora-background`, `meteors`, `spotlight`, marquee (keyframe on `background-position`/`transform`, DOM duplication for seamless loops) → motion layer: if a texture/ambient background arrangement is ever eligible, implement it as a zero-JS Astro component with `prefers-reduced-motion` gating and a static poster, never import the item.",
+    "Compound-component anatomy with `className` passthrough (CardContainer/CardBody/CardItem) → renderer: our section arrangements should expose the same slot-based composition to the editor post-V1."
+  ],
+  "patterns_to_avoid": [
+    "Installing any Aceternity item into generated client sites → proprietary license, no versioning, missing keyframes in registry items, and the visuals are the exact signatures the anti-slop gate exists to reject.",
+    "Ambient infinite animations (beams, sparkles, vortex, shooting stars, meteors, aurora) → permanent main-thread/GPU cost, no off-screen pause, no reduced-motion; breaks the 120 ms main-thread motion budget and the 'static poster fallback' rule.",
+    "WebGL/three.js decor (globe, 3d-globe, dither/cloud/spotlight shaders, 3D marquee) → we allow at most one WebGL section and only with a poster fallback; decorative globes are also a slop signature.",
+    "Pointer-tracked effects (3D card tilt, hero-highlight mask, wobble, glare, magnetic button, following pointer) → hover-only, no touch/keyboard parity, fail a11y expectations for marketing sites.",
+    "Headline gimmicks (typewriter, flip-words, text-generate blur-in per word, encrypted text, colourful text) → cliché and harmful to LCP/readability; our narrative/rhythm rules should forbid animated headlines entirely.",
+    "Hard-coded palette colours (cyan-500, indigo-500, hex stops) inside components → violates 'model selects a design_system_id, never emits a token'."
+  ],
+  "reusable_patterns": [
+    "SlopSignatureCorpus: derive ban lists from the machine-readable catalogue of the most-copied effect library rather than from taste.",
+    "KeyframeOnlyAmbient: an ambient background as a single CSS keyframe on transform/background-position, gated by prefers-reduced-motion, with a static poster as the default.",
+    "SeamlessLoopByDuplication: duplicate the item list once and translate -50% for infinite marquees without JS timing.",
+    "SlotCompoundAnatomy: Container/Body/Item compound components with className passthrough for editor-friendly composition."
+  ],
+  "adoption_strategy": "Ignore as a dependency; use as a negative corpus. Do not install or port any item into the section library: the license is proprietary and forbids redistribution, items lack tokens/keyframes/versioning, 169/284 need framer-motion, and 0/16 sampled components honour reduced motion. Instead, scrape the public registry index once, and feed the item names, `animate-*` classes, dependency fingerprints and layered-blur/conic-gradient patterns into the anti-slop tier-1 ban list; ban outright: background beams, sparkles, lamp effect, aurora background, meteors, shooting stars, vortex, spotlight, glowing/moving/hover-border-gradient, 3D card/comet/glare tilt, globe (both), bento grid with skeletons, typewriter/flip-words/text-generate headlines, infinite moving cards logo clouds, macbook/iphone/ipad mockups, tracing beam, canvas reveal. Where a client design system legitimately calls for an ambient texture, author our own CSS-only arrangement with poster fallback.",
+  "recommendation": "Ignore",
+  "novelty_score": 2,
+  "difficulty_score": 1,
+  "pipeline_stages_affected": ["anti_slop", "motion", "design_system"],
+  "evidence": [
+    "https://ui.aceternity.com/registry.json (284 items; 112 registry:ui, 172 registry:block; dependency counts computed: motion 169, @tabler/icons-react 69, react-fast-marquee 6, three 3, cobe 2, @tsparticles/react 1; 0 items with cssVars/tailwind/css)",
+    "https://ui.aceternity.com/registry/background-beams.json (motion.path over SVG path list, repeat: Infinity, duration: Math.random()*10+10)",
+    "https://ui.aceternity.com/registry/lamp.json (2 conic-gradient motion.divs, blur-2xl/blur-md/blur-3xl layers, 5 whileInView animations, hard-coded cyan)",
+    "https://ui.aceternity.com/registry/aurora-background.json (6 repeating-linear-gradient layers, blur-[10px], animate-aurora class with keyframes not shipped in the item)",
+    "https://ui.aceternity.com/registry/meteors.json (20 spans with animate-meteor-effect, keyframes not shipped)",
+    "https://ui.aceternity.com/registry/3d-card.json (onMouseMove -> rotateY/rotateX, perspective 1000px, React context, no touch/keyboard handlers)",
+    "https://ui.aceternity.com/registry/sparkles.json (@tsparticles/react + engine + slim, initParticlesEngine/loadSlim, fpsLimit 120)",
+    "https://ui.aceternity.com/registry/vortex.json (simplex-noise + requestAnimationFrame canvas loop)",
+    "https://ui.aceternity.com/registry/infinite-moving-cards.json (cloneNode duplication + animate-scroll keyframe, pauseOnHover)",
+    "https://ui.aceternity.com/registry/text-generate-effect.json (per-word filter blur, stagger(0.2)), hero-highlight.json (useMotionValue radial mask-image, no reduced-motion check), spotlight.json, moving-border.json, typewriter-effect.json, background-beams-with-collision.json, bento-grid.json",
+    "https://ui.aceternity.com/registry/github-globe.json returns HTTP 401 (Pro-gated)",
+    "https://ui.aceternity.com/components (catalogue categories and names), https://ui.aceternity.com/pricing (Free / Annual $169 / Lifetime $199 / Team $1,590), https://ui.aceternity.com/licence (proprietary End Product license; no redistribution or marketplace resale of components/derivatives)",
+    "shadcn-ui/ui apps/v4/registry/directory.json entry for @aceternity: url https://ui.aceternity.com/registry/{name}.json",
+    "grep of 16 sampled item sources: 0 occurrences of prefers-reduced-motion or useReducedMotion"
+  ]
+}

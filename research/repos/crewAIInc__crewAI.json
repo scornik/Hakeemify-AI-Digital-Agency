@@ -1,0 +1,71 @@
+{
+  "repo": "crewAIInc/crewAI",
+  "url": "https://github.com/crewAIInc/crewAI",
+  "category": "agents",
+  "license": "MIT",
+  "stars": 58928,
+  "last_push": "2026-09-23",
+  "status_note": "active; now a uv monorepo (lib/crewai, lib/crewai-core, lib/crewai-tools, lib/crewai-files, lib/cli); commercial 'CrewAI AMP/Plus' hooks (plus_api.py, telemetry, a2a) are present in the OSS package.",
+  "core_problem": "Orchestrate role-playing LLM agents over a list of Tasks (sequential or manager-driven), with structured task outputs, guardrail validation with retries, memory and knowledge retrieval; and, via Flows, wrap those crews in deterministic event-driven Python orchestration with persisted state.",
+  "architecture": "Core types in lib/crewai/src/crewai: Agent (agent/core.py, 2.2k lines; role/goal/backstory, max_iter, max_rpm, max_execution_time, max_retry_limit, tools, knowledge_sources, memory) executes a Task via agents/crew_agent_executor.py (ReAct-style loop, parser.py for 'Thought/Action/Final Answer', tools_handler, human feedback hook via core/providers/human_input). Task (task.py, 1.5k lines) declares description/expected_output/context/output_json/output_pydantic/response_model/output_file/guardrail(s)/guardrail_max_retries(3)/human_input. Output validation: `_export_output` calls utilities/converter.py `convert_to_model` which tries direct JSON parse, then `handle_partial_json`, then `convert_with_instructions` via InternalInstructor with `max_attempts`; guardrail loop `_invoke_guardrail_function` runs each GuardrailCallable `(TaskOutput) -> (bool, Any)` up to guardrail_max_retries+1 times, and on failure re-executes the agent with the error appended as I18N 'validation_error' context, tracking per-guardrail retry counts; a string guardrail becomes tasks/llm_guardrail.py LLMGuardrail (LiteAgent returning LLMGuardrailResult valid/feedback); tasks/hallucination_guardrail.py scores faithfulness 0-10 against a context with a threshold. Crew (crew.py, 2.6k lines) with Process enum sequential|hierarchical (process.py; consensual is a TODO); hierarchical requires manager_llm or manager_agent and routes every task through the manager; optional `planning=True` runs utilities/planning_handler.CrewPlanner to prepend a plan. Flow (flow/*): decorators @start/@listen/@router with or_()/and_() conditions (flow_wrappers.py, FlowConditionType OR|AND), a pydantic FlowDefinition (flow_definition.py) that also supports a declarative YAML/JSON form with Code/Tool/Crew/Agent/Expression/Script/Each actions and CEL expressions validated at load; runtime (flow/runtime/__init__.py) fires listeners when their trigger sets are satisfied, routers emit string labels that re-arm listeners; state is a dict, a pydantic model or a JSON schema; persistence via flow/persistence (FlowPersistence ABC, SQLite impl: save_state/load_state/save_pending_feedback/load_pending_feedback) and `Flow.from_pending(flow_id)` resumes a flow paused for async human feedback (flow/human_feedback.py, async_feedback/). Checkpoints (state/checkpoint_config.py CheckpointConfig on_events/provider json|sqlite/max_checkpoints/restore_from) snapshot crew execution. Memory (memory/unified_memory.py) is an LLM-scoped store (scope inferred by LLM, LanceDB/Qdrant backends, RecallFlow adaptive depth); Knowledge (knowledge/*) wraps file/CSV/PDF/JSON/Docling sources with an embedder and a storage backend. Tools: BaseTool pydantic args_schema; crewai-tools package plus MCP. Adapters exist for LangGraph and OpenAI Agents SDK agents. Python only; no TypeScript port.",
+  "core_innovation": "A per-task validation contract: a Task declares a pydantic output schema and a list of pure guardrail callables, and the executor re-runs the agent with the guardrail's error text as feedback until it passes or a bounded retry count is exhausted.",
+  "strengths": [
+    "Guardrail retry loop is explicit, bounded (guardrail_max_retries) and composable (list of callables, per-guardrail counters); the failure message is fed back verbatim to the next attempt.",
+    "Structured output has a three-stage fallback (direct parse -> partial JSON repair -> instructor re-ask), each bounded by max_attempts.",
+    "Flow gives a deterministic, inspectable DAG (start/listen/router, or_/and_) around LLM steps, with a declarative definition object that can be validated and rendered.",
+    "Flow persistence + from_pending is a real, simple human-in-the-loop resume: state and pending feedback are saved, the process can exit, and a later process resumes.",
+    "Agent-level limits are complete: max_iter, max_rpm (rate limiter), max_execution_time (timeout), max_retry_limit."
+  ],
+  "weaknesses": [
+    "Python only; adopting it means a second runtime and a large dependency tree (litellm, chromadb/lancedb, instructor, docling) for a pipeline whose model calls are a handful of JSON selections.",
+    "Role-play prompting (role/goal/backstory, 'You are an expert...') is aspirational prompting by construction, which we have rejected; quality is not enforced by code.",
+    "Hierarchical process and planning delegate control to a manager LLM, i.e. model-narrated orchestration, the opposite of our constraint-first principle.",
+    "LLMGuardrail and HallucinationGuardrail are LLM-judge gates with numeric thresholds (rejected pattern); only the callable guardrails are deterministic.",
+    "Memory infers scope/importance with an LLM on every save; unified memory and Knowledge are RAG machinery we do not need (FactRegistry is typed and curated, not embedded).",
+    "Codebase is large and coupled (crew.py 2.6k, agent/core.py 2.2k, task.py 1.5k lines, telemetry and Plus API baked in); frequent breaking changes (deprecated max_retries, response_model vs output_pydantic overlap)."
+  ],
+  "patterns_to_steal": [
+    "Guardrail contract `(output) -> (ok, resultOrError)` with a bounded retry loop that re-invokes the model with the error text -> creative_direction, beat_selection, arrangement_selection, copy generation: each model call gets a Zod schema plus a list of pure guardrails (ids in eligible set, no banned n-grams, length limits) and at most N re-asks with the concrete violation appended; on exhaustion, fall back deterministically (service_clarity archetype / default arrangement), never accept.",
+    "Three-stage structured output coercion (parse -> repair partial JSON -> re-ask with schema instructions), each attempt-bounded -> the shared model-call wrapper; with Zod, stage 1 is safeParse, stage 2 is a tolerant JSON repair, stage 3 is a re-ask including the ZodError issues.",
+    "Per-guardrail retry counters and accumulated tool_failures kept across retries -> decision manifest / telemetry: record which guardrail fired, how many times, for which candidate id, so priors promotion can learn which playbooks cause retries.",
+    "Flow's declarative definition (FlowDefinition pydantic with validated step names and expressions) -> agent_orchestration: represent our pipeline as a static, validated stage list (Zod) with typed edges rather than code-only wiring, so the Decision Manifest can cite the stage graph.",
+    "Flow.from_pending(flow_id) with saved pending-feedback record -> gap_report / human review: pause a build at the gap report, persist a pending record, resume later in a fresh process."
+  ],
+  "patterns_to_avoid": [
+    "Crew/Agent role-play with backstory and manager-LLM hierarchical process -> aspirational prompting and model-driven orchestration are both rejected; our orchestration is code.",
+    "LLMGuardrail (string guardrail -> LLM validator) and HallucinationGuardrail threshold -> LLM judge as a gate is rejected; keep LLM judging warning-only (anti-slop tier 2).",
+    "Unified Memory with LLM-inferred scopes and vector stores -> FactRegistry is typed, provenance-tracked and human-quotable; embedding-based recall would break traceability.",
+    "Knowledge sources (Docling/PDF/CSV RAG) for research -> research output must land in FactRegistry with provenance, not in an embedding store queried at generation time."
+  ],
+  "reusable_patterns": [
+    "GuardrailRetryLoop: a list of pure predicates over a model output; failures are fed back as feedback and the call is retried at most N times, then a deterministic fallback is taken.",
+    "StagedOutputCoercion: parse strictly, then repair, then re-ask with schema errors, each stage bounded.",
+    "DeclarativeFlowDefinition: the orchestration graph is data (validated at load) rather than only code, enabling rendering, validation and audit.",
+    "PendingFeedbackResume: persist state plus a 'waiting for human' record so a later process can resume via an id.",
+    "AgentRateAndTimeLimits: max_iter, requests-per-minute and wall-clock timeout enforced at the executor, independent of prompts."
+  ],
+  "adoption_strategy": "Adapt (pattern only; do not install crewAI). Write a ~150-line TypeScript `constrainedCall<T>(schema: ZodSchema<T>, guardrails: Guardrail<T>[], maxRetries=2)` that mirrors Task._invoke_guardrail_function + convert_to_model: safeParse, repair, re-ask with ZodError issues and guardrail messages, then deterministic fallback; log every attempt as a run event. Ignore Crew/Agent/Process/Memory/Knowledge entirely. Flows are the one orchestration idea worth noting, but LangGraph.js already gives the same start/listen/router semantics with checkpointing in TypeScript, so use that or a hand-rolled state machine instead of porting Flow. Is a full agent framework warranted? No; the guardrail loop is the only piece of crewAI our three constrained calls need.",
+  "recommendation": "Adapt",
+  "novelty_score": 4,
+  "difficulty_score": 2,
+  "pipeline_stages_affected": [
+    "creative_direction",
+    "beat_selection",
+    "arrangement",
+    "copy_generation",
+    "agent_orchestration",
+    "anti_slop",
+    "telemetry"
+  ],
+  "evidence": [
+    "lib/crewai/src/crewai/task.py (fields output_json/output_pydantic/response_model/guardrail/guardrails/guardrail_max_retries/human_input; _export_output; _invoke_guardrail_function retry loop lines ~1327-1400)",
+    "lib/crewai/src/crewai/utilities/guardrail_types.py (GuardrailCallable = Callable[[TaskOutput], tuple[bool, Any]])",
+    "lib/crewai/src/crewai/utilities/converter.py (Converter.to_pydantic max_attempts, convert_to_model, handle_partial_json, convert_with_instructions, InternalInstructor)",
+    "lib/crewai/src/crewai/tasks/llm_guardrail.py (LLMGuardrailResult valid/feedback), tasks/hallucination_guardrail.py (threshold faithfulness)",
+    "lib/crewai/src/crewai/process.py (sequential/hierarchical), crew.py (manager_llm/manager_agent, planning, _run_hierarchical_process, CrewPlanner)",
+    "lib/crewai/src/crewai/agent/core.py (max_iter, max_rpm, max_execution_time, max_retry_limit), agents/crew_agent_executor.py (ask_for_human_input, _handle_human_feedback)",
+    "lib/crewai/src/crewai/flow/flow_wrappers.py (StartMethod/ListenMethod/RouterMethod, OR/AND), flow/flow_definition.py (FlowDefinition, state definitions, action types, CEL validation), flow/runtime/__init__.py (router re-arming, persistence, from_pending), flow/persistence/base.py + sqlite.py",
+    "lib/crewai/src/crewai/state/checkpoint_config.py (CheckpointConfig on_events/provider/max_checkpoints/restore_from), state/provider/{json,sqlite}_provider.py",
+    "lib/crewai/src/crewai/memory/unified_memory.py (LLM-inferred scope, root_scope), memory/storage/{lancedb,qdrant_edge}_storage.py, knowledge/knowledge.py + knowledge/source/*"
+  ]
+}

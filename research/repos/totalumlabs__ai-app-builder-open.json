@@ -1,0 +1,63 @@
+{
+  "repo": "totalumlabs/ai-app-builder-open",
+  "url": "https://github.com/totalumlabs/ai-app-builder-open",
+  "category": "ai-website-builders",
+  "license": "MIT (UI only; the agent, sandboxes, hosting and database are Totalum's closed, credit-metered API)",
+  "stars": 64,
+  "last_push": "2026-09-18",
+  "status_note": "active; a thin open-source front-end for the proprietary Totalum 'VCaaS' API (api-accounts.totalum.app). No agent loop, planner, or output validator exists in this repo; 'self-hosted' means the Next.js UI only. No auth by design, no test suite.",
+  "core_problem": "Give operators a white-label Next.js workspace (prompt, chat, live preview, Monaco code panel, database CMS, visual editor, GitHub/Figma import, publish, custom domains) that drives Totalum's hosted agent which turns a prompt into a full-stack Next.js app.",
+  "architecture": "Next.js 16 / React 19 / Tailwind 4, shadcn/Radix UI. Every capability goes through src/lib/vcaas.ts (vcaasApi catalog: projects.list/get/create/launch, agent runs, files, deploy, versions, secrets, domains, github, figma, db) -> same-origin proxy routes src/app/api/vcaas/[...path] -> src/lib/vcaas-server.ts adds the TOTALUM_VCAAS_API_KEY header -> https://api-accounts.totalum.app/api/v1/vcaas. Shared wire types live in src/lib/vcaas-types.ts (VcaasProject with agentProcessStatus 'init'|'done'|'idle', agentServerStatus Active/Creating/Starting/Archived/..., deployment, versionRecovery and importInProgress as server-authoritative locks, secrets, customDomain, previewImageUrl, totalCreditsSpent). src/app/api/vcaas/_shared.ts auth/ownership guards are deliberate no-ops (one operator key). The agent is fully remote and opaque: per src/lib/agent-progress.ts 'The agent reports init or done and nothing in between', so the UI derives progress from elapsed time via RUN_ESTIMATE_MS (10 min), a RUN_ESTIMATE_LADDER of 12 rungs that extends the estimate as the run outlives it, PROGRESS_CEILING 0.97 and strictly increasing interpolation so the bar never moves backwards. What is implemented locally: (1) the visual editor, ~6.6k lines across src/lib/visual-edit*.ts and src/app/api/visual-edit/[projectId]/apply/route.ts: the preview is a production next start build proxied same-origin by src/app/api/preview/[projectId]; an in-page agent posts an ElementSignature (route, tag, decoded text, source-stripped className, parent/sibling text, nthOfType, id/ancestorId, src with proxy prefix stripped, selectionId) and the matcher resolves it to exact character spans in three tiers: build tag data-tlm-loc=\"file:line:col\" from a template loader, then structural matching over a TypeScript-AST source model (visual-edit-source.ts parses TSX with the typescript compiler: every JSX element, static class tokens with spans, entity-decoded/collapsed text, parent/siblings, whether inside .map(); it never evaluates expressions), then data-array matching for copy that lives in const arrays rendered by .map(); ambiguity or low confidence refuses instead of guessing. (2) src/lib/preview-health.ts classifies fetched preview HTML into ok / placeholder (<4 KB sandbox page) / assets-missing / scripts-dead (document 200 but several /_next/static chunks 503), requiring several independent signals because false positives destroy trust. (3) src/lib/project-operation.ts + use-project-operation.ts: one persisted 'operation slot' (publish/rebuild/githubPull/restoreVersion/restartServer) adopting server timestamps. (4) Database CMS (DatabasePanel + lib/totalum-schema/query/join-filter) copied verbatim from the platform, always server-side querying. AGENTS.md is an unusually detailed map of invariants (e.g. wake an Archived sandbox only on user touch, 8 MB upload limit mirrored client/server).",
+  "core_innovation": "A source-map-free visual editor that maps a clicked element in a production build back to exact source spans via a build-time location tag, a TypeScript-AST structural model, and data-array lookup, refusing when ambiguous.",
+  "strengths": [
+    "visual-edit-source.ts / visual-edit-match.ts: parse TSX with the real TypeScript parser, model static class tokens with spans and entity-decoded text, treat uniqueness in route-reachable files as evidence, and refuse on ambiguity; the header documents a measured 2/12 success rate that motivated replacing regex matching.",
+    "data-tlm-loc build tag (file:line:col injected by a loader) as the exact tier: cheap, deterministic element-to-source provenance.",
+    "preview-health.ts: multi-signal verdicts with an explicit 'false positive is worse than false negative' policy and a reproduced failure case (scripts-dead) documented in code.",
+    "agent-progress.ts: honest progress UX under an opaque agent (extending estimate ladder, ceiling below 100%, never-backwards interpolation), pure and unit-testable.",
+    "Server-authoritative operation locks (versionRecovery, importInProgress) with self-expiry, mirrored rather than reinvented by the client.",
+    "AGENTS.md as a precise, invariant-focused map for AI coding agents (commands, where features live, non-obvious rules)."
+  ],
+  "weaknesses": [
+    "The agent loop, planning, and output validation the task asked about do not exist in this repo; they are behind a paid, closed API whose only observable states are init/done/idle. Nothing about how it plans or validates can be read or reused.",
+    "Hard vendor lock: every feature (hosting, DB, auth of generated apps, deploy, domains, GitHub sync) is Totalum; the MIT UI is a customer-acquisition shell, and credits are spent on the operator's key by anyone who reaches the URL (no auth).",
+    "Generated artefact is arbitrary full-stack Next.js code, the opposite of a constrained SiteDefinition; no design system, no section library, no quality gate visible.",
+    "Very large components (1.7k-line workspace page, 2.3k-line DatabasePanel, 5.2k-line i18n dictionary copied from the platform); no tests (verification is 'typecheck + build + click through with a real key').",
+    "Runs take 4-10 minutes with no intermediate signal, so the UI is built around guessing.",
+    "Comment style in lib/ is dense, all-caps, warning-laden prose; extractable modules carry platform-specific assumptions (Totalum preview proxy, .map()-array conventions of its generator)."
+  ],
+  "patterns_to_steal": [
+    "Build-time source location tag (data-tlm-loc=file:line:col via a loader) -> post-V1 visual editor: emit data-section-id/data-field-path attributes from Astro components so a clicked element maps directly to a SiteDefinition path, no inference needed.",
+    "AST-based structural source model with refusal on ambiguity -> visual editor fallback only if we ever allow editing hand-authored section code; the principle 'refuse rather than guess' applies to any model-proposed patch that cannot be located uniquely.",
+    "Multi-signal preview health verdicts (placeholder / assets-missing / scripts-dead) with a false-positive-averse threshold -> Launch QA gate: classify a crawled page as healthy only when document, stylesheet and script chunks all resolve; flag hydration-dead pages.",
+    "Extending-estimate progress ladder with a ceiling and monotone interpolation -> owner-facing job status for our multi-minute pipeline runs.",
+    "Server-authoritative operation locks with self-expiry mirrored by the client -> pipeline job state: one persisted operation slot per site (build/audit/publish), server timestamps, stale-lock expiry."
+  ],
+  "patterns_to_avoid": [
+    "Opaque remote agent with init/done-only status -> our Decision Manifest and telemetry require every stage to emit structured events; never accept a black-box generator.",
+    "Full-stack code generation as the deliverable -> we ship a constrained SiteDefinition rendered by Astro.",
+    "No-auth operator-key architecture -> even though accounts are cut from V1, any exposed endpoint must not spend credits on behalf of strangers.",
+    "Copying a vendor's 5k-line i18n dictionary and CMS verbatim -> avoid importing platform surface area we do not need."
+  ],
+  "reusable_patterns": [
+    "SourceLocationTag: stamp rendered elements with a build-time file:line:col (or schema path) so editor selections resolve without inference.",
+    "RefuseOnAmbiguity: a matcher returns not-found / low-confidence / ambiguous as first-class outcomes instead of a best guess.",
+    "MultiSignalHealthVerdict: require several independent failure signals before declaring a preview broken.",
+    "ExtendingEstimateLadder: progress estimates that lengthen as a job runs, capped below completion, never moving backwards.",
+    "ServerAuthoritativeOperationLock: a single persisted in-flight operation with server-issued timestamps and self-expiry."
+  ],
+  "adoption_strategy": "Ignore for the pipeline; Adapt two ideas for later. The repository cannot inform agent orchestration because its agent is closed-source, and its product model (hosted Next.js apps on a metered API) is orthogonal to a constrained site pipeline. Two mechanisms are worth noting for the post-V1 visual editor and the QA gate: build-time source/schema location tags (trivial with Astro components) and the false-positive-averse preview-health classifier. Do not depend on the Totalum API.",
+  "recommendation": "Ignore",
+  "novelty_score": 4,
+  "difficulty_score": 3,
+  "pipeline_stages_affected": ["visual_editor", "qa_gate", "agent_orchestration"],
+  "evidence": [
+    "README.md 'How it works' diagram and 'What this repo actually depends on'; .env.example (only TOTALUM_VCAAS_API_KEY required)",
+    "AGENTS.md ('This repo is only the UI', no auth by design, architecture in one screen, feature map, no test suite)",
+    "src/lib/vcaas.ts (vcaasApi catalog), src/lib/vcaas-server.ts, src/lib/vcaas-types.ts (VcaasProject: agentProcessStatus init|done|idle, versionRecovery/importInProgress locks)",
+    "src/lib/agent-progress.ts (RUN_ESTIMATE_MS, RUN_ESTIMATE_LADDER, PROGRESS_CEILING, runEstimateAt, monotone interpolation)",
+    "src/lib/visual-edit.ts (ElementSignature), src/lib/visual-edit-source.ts (TypeScript-AST source model, NAMED_ENTITIES), src/lib/visual-edit-match.ts (three tiers: data-tlm-loc, structural, data arrays; refusal rules), src/app/api/visual-edit/[projectId]/apply/route.ts",
+    "src/lib/preview-health.ts (PreviewVerdict ok/placeholder/assets-missing/scripts-dead, PLACEHOLDER_MAX_HTML_LENGTH, MIN_DEAD_SCRIPTS rationale)",
+    "src/lib/project-operation.ts, src/components/workspace/use-project-operation.ts, src/app/api/vcaas/_shared.ts (no-op guards)",
+    "package.json (no AI SDK, no auth, no test script)"
+  ]
+}
