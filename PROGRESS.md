@@ -189,3 +189,80 @@ that the union covers every static check, so no check ships untested.
 **Uniqueness is asserted against the SiteDefinition, not by crawling.** Titles, descriptions,
 sitemap membership and internal link targets are all decidable before anything is deployed,
 because the routes come from the contract.
+
+---
+
+## P4 — `pipeline` (in progress)
+
+**DoD:** `pnpm --filter @ada/pipeline test` exits 0, with the retreat order, interrupt/resume,
+both budget ceilings, stuck detection, manifest derivation and the tier-3 detector each asserted.
+✅ for everything except the four model-call stages themselves, which land with P6's wiring.
+105 tests.
+
+Delivered: run state and the append-only event log, the checkpointed stage machine with
+interrupt/resume, the model-call wrapper and its deterministic fakes, eligibility and the compat
+retreat ladder, assembly (composition, narrative, rhythm, computed intensity), anti-slop tiers 1
+and 3, and the Decision Manifest and Gap Report projections.
+
+### Decisions
+
+**The pipeline depends on a `LibraryView` interface, not on the library's file layout.** The
+library package satisfies it and tests satisfy it with fixtures. It keeps the boundary honest: a
+field the pipeline needs that is not on the interface is a visible change to the contract between
+them, rather than a quiet reach into another package's internals.
+
+**Eligibility and compatibility are separate mechanisms, and only one of them relaxes.**
+Eligibility asks what the evidence supports and its answer is `requires`. Compatibility asks what
+fits the chosen design system, art direction and positioning. The retreat ladder is a list of
+*filters over already-eligible candidates*, so `compatFilter` structurally cannot re-admit a
+variant whose `requires` failed — it never sees one. This is ARCHITECTURE's "invariant most
+likely to come under deadline pressure", and the defence is the shape of the code rather than a
+comment. `retreatOrder()` exports the ladder as data and a test asserts it contains no step for
+`requires`.
+
+**The memo key excludes the model id.** A decision made from a given eligible set, prompt and
+seed is the same decision whoever answered. Including the model would silently invalidate every
+cached decision on a model upgrade, which is a re-decision nobody asked for.
+
+**Stuck detection fires on the second identical rejection, not the third.** Re-proposing a value
+that was already rejected will not become right on another attempt, and spending the rest of the
+re-ask budget to discover that is the cost worth avoiding. The test asserts the call count.
+
+**`finish_reason === 'length'` breaks the loop rather than re-asking.** A truncated selection is
+not a partial selection, and re-asking the same question after a truncation usually truncates
+again. It goes straight to the deterministic fallback.
+
+**The wrapper refuses a fallback that is not itself eligible.** A pipeline that falls back to
+something it has just decided the evidence does not support has defeated its own gate. It throws
+rather than returning an outcome, because it is a programming error, not a run state.
+
+**Coercion is recorded, never silent.** Trimming whitespace and matching case are worth doing
+without another round trip; doing them invisibly produces a system nobody can debug. Anything
+beyond that is left alone rather than guessed at.
+
+**Tier 3 separates what a person reads from what a build is blocked on.** A nine-word cliché
+surfaces as several overlapping six-grams, which is one finding presented four times, so they are
+chained back into the full phrase for the review queue. But blocking on that reassembled phrase
+would be wrong in the other direction: a build reusing six words of a nine-word cliché is reusing
+the cliché, and matching only the full chain would flag house slop and then wave it through. The
+flag therefore carries `value` (the readable phrase) and `matches` (the n-grams that actually
+crossed the threshold). Both halves have a test.
+
+**Proper nouns are dropped, not replaced.** A business name appearing in every one of its own
+builds is not a cliché. The dropped word leaves a sentinel so no n-gram can span the hole and
+make a phrase look repeated when only the name was.
+
+**The manifest has no free text anywhere.** Every sentence is a template over a recorded value,
+and an unfamiliar predicate is quoted verbatim rather than paraphrased — a wrong paraphrase of a
+gate is worse than an unfriendly one. The test asserts each sentence is reproducible from the
+snapshot by calling the same template, so a hand-written string would fail it.
+
+**A predicate that was never evaluated is recorded as such.** `ruledOutFor` emits
+`actual: null` with an explicit note rather than omitting the row, because a missing gate that
+reads as "passed" is the failure mode this whole layer exists to prevent.
+
+**Positioning interrupts the run rather than defaulting.** v4 §6 is explicit that a model
+guessing "premium" for a budget operator misrepresents a business to its own customers in its own
+voice. The stage returns `WAITING_FOR_OWNER` and does not advance, so resuming re-enters the same
+stage with the answer. `resume` refuses a run that is not waiting, so an answer cannot be
+silently dropped.
