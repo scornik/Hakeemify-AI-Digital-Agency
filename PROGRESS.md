@@ -54,3 +54,66 @@ four packages as projects; each package config excludes `**/dist/**` so compiled
 `dist/tests/*.js` are not collected twice.
 
 **Postgres on port 55432.** Avoids colliding with a local 5432.
+
+---
+
+## P1 — `contract`
+
+**DoD:** `pnpm --filter @ada/contract test` exits 0, with the predicate grammar at 100%
+branch coverage. ✅ — 192 tests, predicate coverage 100% statements/branches/functions/lines,
+enforced as a per-glob threshold in `packages/contract/vitest.config.ts` so it cannot regress.
+
+Delivered: Zod `SiteDefinition` + `FactRegistry`; predicate lexer, parser (cached
+JSON-serialisable AST) and total evaluator with snapshot output; per-build JSON Schema
+generation; invariant runner; migration harness; canonical hashing.
+
+### Decisions
+
+**The published predicate grammar is incomplete, and two readings were forced.** v4 §2 writes
+`expr := term (('&&' | '||') term)*`, which is flat and therefore ambiguous; `&&` was given
+higher precedence than `||`. The same grammar lists `term` as call / comparison / group, yet
+v4's own examples use bare paths as booleans (`grade_safe`, `attributable`), so `term` admits a
+bare path evaluated for truthiness. Both readings are recorded at the top of `parser.ts`.
+
+**A missing path fails every comparison, `!=` included.** v4 says "a missing path evaluates to
+false / 0 / empty" without enumerating operators. Had `!=` been left with JavaScript semantics,
+`rights != "unknown"` would have *admitted* an asset with no `rights` field at all — the exact
+opposite of the intent. Gates fail closed. There is a test for it, and a second test proving it
+holds inside filters.
+
+**An empty array is falsy.** `media.photos` as a bare term means "has photos", not "has a
+photos key". `exists()` remains available when presence is the question.
+
+**Filters see the item, never the registry root.** A filter that could reach past its item would
+make `count(a[x])` depend on where it was written.
+
+**Derived fields are materialised by the schema, not by the evaluator.** v4 declares
+`attributable` as a TypeScript getter on `Testimonial`; a getter cannot survive JSONB. Rather
+than teach the evaluator about testimonials, `attributable`, `has_before_after` and `aspect` are
+computed by Zod transforms at parse time, and are always recomputed so a stored registry cannot
+carry a forged one. Test: a registry with `attributable: true` planted on an unconsented,
+unattributed testimonial parses to `false`.
+
+**Name claims are extracted from prose only.** The leash must catch an invented number, date,
+quotation or name. Numbers, dates and quotations are unambiguous. Names are not: in a Title Case
+headline every word is capitalised, so "Dana Whitlock" and "Storm Damage Repair" are
+indistinguishable, and flagging both would block ordinary copy on every build. Name extraction
+therefore runs only on text containing a lower-case-initial word after the first. **Residual
+gap, stated plainly:** a fabricated name inside a Title Case headline is not caught at this
+layer. It is caught at the DOM layer by `content.facts-provenance` (gate-checklist row 112),
+which compares rendered text against the registry. This is a decision about *where* the check
+lives, not a relaxation of it — numbers and dates are still extracted from headlines.
+
+**An empty eligible set throws rather than emitting `enum: []`.** Some providers accept an
+empty enum and then satisfy it with an arbitrary string, which is precisely a model naming a
+section that does not exist. A call with nothing eligible is a programming error; the pipeline
+must fall back deterministically instead.
+
+**Canonical JSON refuses what JSON cannot represent faithfully.** `NaN`, `Infinity`, `bigint`,
+functions and symbols throw with the offending path rather than serialising to something that
+hashes differently on the way back. The done gate compares hashes, so silent drift there would
+mean publishing a site no green report was ever produced for.
+
+**Stack exhaustion is a parse error, not an exception.** Recursive descent on 60k nested parens
+overflows; totality is a promise to the eligibility engine, so it returns
+`{ ok: false, error: 'predicate nests too deeply to parse' }`. This is a test, not a comment.

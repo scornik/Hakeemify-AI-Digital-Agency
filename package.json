@@ -16,7 +16,8 @@
     "verify": "pnpm run check:licences && pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run test",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
-    "check:licences": "node scripts/check-licences.mjs"
+    "check:licences": "node scripts/check-licences.mjs",
+    "test:cov": "vitest run --coverage"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
