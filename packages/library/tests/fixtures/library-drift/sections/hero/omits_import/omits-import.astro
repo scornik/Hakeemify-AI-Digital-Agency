@@ -1,0 +1,18 @@
+---
+// FIXTURE — a section whose manifest does not tell the truth about its imports.
+//
+// `js-yaml` is a real, installed package and a real import. The manifest beside this file
+// declares `dependencies: []`. `./lib/missing-helper.js` is a real relative import that the
+// manifest's `files[]` never mentions. Both must be caught: a manifest that understates its
+// imports is how an island, a runtime or a licence reaches a client's site unannounced.
+import { load } from 'js-yaml';
+import { helper } from './lib/missing-helper.js';
+
+const { headline } = Astro.props as { headline: string };
+const parsed = load('a: 1');
+---
+
+<section class="omits-import">
+  <h1>{helper(headline)}</h1>
+  <pre>{JSON.stringify(parsed)}</pre>
+</section>

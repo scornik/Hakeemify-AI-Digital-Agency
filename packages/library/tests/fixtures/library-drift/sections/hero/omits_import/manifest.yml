@@ -1,0 +1,59 @@
+# FIXTURE — the manifest that lies. `dependencies` is empty though the `.astro` frontmatter
+# imports `js-yaml`, and `files[]` omits `lib/missing-helper.ts` though the frontmatter imports
+# it. The ts-morph drift check must fail on both.
+name: hero/omits_import
+type: registry:section
+title: Omits a real import
+schema_version: 1
+family: hero
+status: scaffold
+novelty_class: drift_fixture
+
+files:
+  - { path: omits-import.astro, type: registry:section }
+
+dependencies: []
+registryDependencies: []
+
+serves_beats: [hook]
+serves_rhythm_roles: [impact]
+requires: []
+
+slots:
+  - slot: headline
+    required: true
+    source: { kind: generated, grounded_in: [business.legal_name], may_claim: quotable_only }
+
+design_compat:
+  systems: [reference_v1]
+
+composition:
+  density: sparse
+  background_weight: light
+  focal_weight: 3
+  approx_vh: 90
+  media_dependency: none
+  text_volume: { headline_max_chars: 48, body_max_chars: 120 }
+
+motion:
+  effect: reveal_fade
+  pattern: reveal
+  tier: tier_a
+  trigger: load
+  density: 0.1
+  budget_ms: 300
+  main_thread_ms_est: 3
+  reduced_motion_fallback: instant
+
+budget: { js_kb: 1, blocks_lcp: true, requires_webgl: false }
+
+a11y:
+  interactive: false
+  reduced_motion_fallback: 'Headline is present and opaque.'
+
+priors: { status: unproven }
+
+arrangements:
+  - id: plain
+    novelty_class: drift_fixture
+    grade: ungraded

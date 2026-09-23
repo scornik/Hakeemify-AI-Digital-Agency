@@ -1,0 +1,27 @@
+---
+// FIXTURE — a scaffold section, shaped the way P5 will shape the real ones.
+//
+// It is here so the ts-morph import scan has a real `.astro` frontmatter fence to parse and
+// the eligibility plumbing has a real `status: scaffold` manifest to exclude. It is not a
+// design: ARCHITECTURE §10 reserves authored section variants for a human.
+import { z } from 'zod';
+import type { SectionFamily } from '@ada/contract';
+import { formatServiceTitle } from './lib/format.js';
+
+interface Props {
+  headline: string;
+  services: { title: string; summary?: string }[];
+}
+
+const { headline, services } = Astro.props as Props;
+const family: SectionFamily = 'services';
+const Items = z.array(z.object({ title: z.string() }));
+Items.parse(services);
+---
+
+<section data-sd-id={family} class="service-clarity-stack">
+  <h2>{headline}</h2>
+  <ul>
+    {services.map((service) => <li>{formatServiceTitle(service.title)}</li>)}
+  </ul>
+</section>

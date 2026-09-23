@@ -1,0 +1,33 @@
+# FIXTURE — broken in several ways at once, to prove boot validation accumulates rather than
+# stopping at the first problem: the id is not `family/variant`, the family is not in the
+# closed set, `requires` does not parse, and `files` is empty.
+name: NotAVariantId
+type: registry:section
+schema_version: 1
+family: marketing
+status: scaffold
+novelty_class: broken
+files: []
+serves_beats: [hook]
+requires: ['count(']
+design_compat: { systems: [reference_v1] }
+composition:
+  density: loose
+  background_weight: light
+  focal_weight: 9
+  approx_vh: 70
+  media_dependency: none
+  text_volume: { headline_max_chars: 40, body_max_chars: 100 }
+motion:
+  effect: reveal_fade
+  pattern: reveal
+  tier: tier_z
+  trigger: load
+  density: 4
+  budget_ms: 100
+  main_thread_ms_est: 1
+  reduced_motion_fallback: whatever
+budget: { js_kb: 0, blocks_lcp: false, requires_webgl: false }
+a11y: { interactive: false, reduced_motion_fallback: 'none' }
+priors: { status: unproven }
+arrangements: []

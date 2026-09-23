@@ -1,0 +1,16 @@
+# FIXTURE — a second broken manifest, so the accumulated report spans files rather than
+# stopping at the first bad one. Missing `family`, missing `composition`, missing `motion`.
+name: hero/missing_fields
+type: registry:section
+schema_version: 1
+status: scaffold
+novelty_class: broken
+files:
+  - { path: missing.astro, type: registry:section }
+serves_beats: [hook]
+design_compat: { systems: [reference_v1] }
+budget: { js_kb: 0, blocks_lcp: false, requires_webgl: false }
+a11y: { interactive: false, reduced_motion_fallback: 'none' }
+priors: { status: unproven }
+arrangements:
+  - { id: plain, novelty_class: broken, grade: ungraded }

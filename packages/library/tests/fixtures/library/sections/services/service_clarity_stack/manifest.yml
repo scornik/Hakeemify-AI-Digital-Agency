@@ -1,0 +1,86 @@
+# FIXTURE — a well-formed scaffold manifest. Every declared import is real, so the ts-morph
+# drift check passes; `status: scaffold` and `grade: ungraded` keep it out of every non-fixture
+# eligible set (ARCHITECTURE §10).
+name: services/service_clarity_stack
+type: registry:section
+title: Service clarity stack
+description: Scaffold. Exists so the pipeline is end-to-end testable before the library exists.
+schema_version: 1
+family: services
+status: scaffold
+novelty_class: stacked_list
+fallback: true
+
+files:
+  - { path: service-clarity-stack.astro, type: registry:section }
+  - { path: lib/format.ts, type: registry:lib }
+
+dependencies: [zod, '@ada/contract']
+registryDependencies: []
+cssVars:
+  theme:
+    --ds-space-3: 24px
+
+serves_beats: [mechanism, offer]
+serves_rhythm_roles: [explanation]
+requires: []
+enhanced_by:
+  - { predicate: 'count(services) >= 3', weight: 2 }
+
+slots:
+  - slot: headline
+    required: true
+    source: { kind: generated, grounded_in: [business.niche], may_claim: quotable_only }
+    max_chars: 64
+    register: inherit_positioning
+  - slot: services
+    required: true
+    source: { kind: fact, query: services }
+
+affinity:
+  industries: []
+
+design_compat:
+  systems: [reference_v1]
+  composition_families: [minimalist]
+  visual_energy_range: [1, 6]
+
+composition:
+  density: medium
+  background_weight: light
+  focal_weight: 1
+  approx_vh: 70
+  media_dependency: none
+  text_volume: { headline_max_chars: 64, body_max_chars: 320, items_min: 2, items_max: 6 }
+
+motion:
+  effect: reveal_fade
+  pattern: reveal
+  tier: tier_a
+  trigger: in_view
+  density: 0.1
+  budget_ms: 420
+  main_thread_ms_est: 4
+  reduced_motion_fallback: instant
+
+budget: { js_kb: 2, blocks_lcp: false, requires_webgl: false }
+
+a11y:
+  interactive: false
+  reduced_motion_fallback: 'Items are present and opaque; no transform runs.'
+  contrast_pairs:
+    - [fg.primary, bg.base]
+
+priors:
+  status: unproven
+  note: Scaffold. No belief either way.
+
+arrangements:
+  - id: stacked
+    novelty_class: stacked_list
+    props: { columns: 1 }
+    grade: ungraded
+  - id: two-column
+    novelty_class: two_column_list
+    props: { columns: 2 }
+    grade: ungraded
