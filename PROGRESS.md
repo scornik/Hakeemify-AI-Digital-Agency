@@ -8,12 +8,12 @@ Running log of milestones, their definition of done, and decisions taken. Author
 | --- | --- | --- |
 | P0 Scaffold | ✅ done | `pnpm verify` |
 | P1 `contract` | ✅ done | `pnpm --filter @ada/contract test` |
-| P2 `gate` | ⏳ not started | `pnpm --filter @ada/gate test` |
+| P2 `gate` | ✅ done | `pnpm --filter @ada/gate test` |
 | P3 `library` infra | ✅ done | `pnpm --filter @ada/library test` |
-| P4 `pipeline` | ⏳ not started | `pnpm --filter @ada/pipeline test` |
-| P5 Renderer + scaffold sections | ⏳ not started | `pnpm --filter @ada/library build:fixture` |
-| P6 End to end | ⏳ not started | `pnpm e2e:fixture` |
-| P7 Section library | 🚫 human only | — |
+| P4 `pipeline` | ✅ done | `pnpm --filter @ada/pipeline test` |
+| P5 Renderer + scaffold sections | ✅ done | `pnpm --filter @ada/library run build:fixture` |
+| P6 End to end | ✅ done | `pnpm e2e:fixture` |
+| P7 Section library | 🚫 human only — see `HANDOFF.md` | — |
 
 ---
 
