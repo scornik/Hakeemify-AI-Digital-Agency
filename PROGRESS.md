@@ -7,7 +7,7 @@ Running log of milestones, their definition of done, and decisions taken. Author
 | Phase | Status | DoD command |
 | --- | --- | --- |
 | P0 Scaffold | ✅ done | `pnpm verify` |
-| P1 `contract` | ⏳ not started | `pnpm --filter @ada/contract test` |
+| P1 `contract` | ✅ done | `pnpm --filter @ada/contract test` |
 | P2 `gate` | ⏳ not started | `pnpm --filter @ada/gate test` |
 | P3 `library` infra | ⏳ not started | `pnpm --filter @ada/library test` |
 | P4 `pipeline` | ⏳ not started | `pnpm --filter @ada/pipeline test` |
