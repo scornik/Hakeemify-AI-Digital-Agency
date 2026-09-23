@@ -13,7 +13,8 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --build"
+    "typecheck": "tsc --build",
+    "e2e": "tsc --build && node scripts/e2e-fixture.mjs"
   },
   "dependencies": {
     "@ada/contract": "workspace:*",

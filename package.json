@@ -19,7 +19,8 @@
     "check:licences": "node scripts/check-licences.mjs",
     "library:grade": "node packages/library/bin/library-grade.mjs",
     "test:cov": "vitest run --coverage",
-    "build:fixture": "pnpm --filter @ada/library run build:fixture"
+    "build:fixture": "pnpm --filter @ada/library run build:fixture",
+    "e2e:fixture": "pnpm --filter @ada/library run build:fixture && pnpm --filter @ada/pipeline run e2e"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

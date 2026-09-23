@@ -10,3 +10,6 @@ export * from './model/wrapper.js';
 export * from './model/fake.js';
 export * from './antislop/tier1.js';
 export * from './antislop/tier3.js';
+export * from './library-adapter.js';
+export * from './build.js';
+export * from './run.js';

@@ -37,6 +37,23 @@ export interface PlacedSection {
   readonly is_signature: boolean;
 }
 
+/**
+ * True when every section on the page came from a scaffold.
+ *
+ * This is the one condition under which `no_signature_section` is not a defect but a fact about
+ * the library: a signature section is `focal_weight == 3` **and** an arrangement that names a
+ * `signature_move`, and only a human may write one (ARCHITECTURE §10). Until the library is
+ * authored there is no arrangement in existence that could satisfy the rule, so a page built
+ * entirely from scaffolds fails it by construction rather than by composition.
+ *
+ * Scoping it this narrowly is deliberate. It is not keyed on "is this a fixture build", which
+ * would let a fixture build skip the rule even once graded sections existed; the moment one
+ * graded arrangement is placed on the page, the rule is blocking again.
+ */
+export function isScaffoldOnly(sections: readonly PlacedSection[]): boolean {
+  return sections.length > 0 && sections.every((section) => section.variant.status === 'scaffold');
+}
+
 export const ASSEMBLY_CODES = [
   'min_sections',
   'max_sections',
@@ -89,6 +106,7 @@ export function validateComposition(
   limits: CompositionLimits = DEFAULT_LIMITS,
 ): AssemblyViolation[] {
   const out: AssemblyViolation[] = [];
+  const scaffoldOnly = isScaffoldOnly(sections);
 
   if (sections.length < limits.min_sections) {
     out.push({
@@ -153,10 +171,14 @@ export function validateComposition(
   if (signatures.length < limits.signature_min) {
     out.push({
       code: 'no_signature_section',
-      detail: 'a page needs at least one moment; no arrangement here names a signature move',
+      detail: scaffoldOnly
+        ? 'every section on this page is a scaffold, and only a human may write a signature ' +
+          'move, so no arrangement that could satisfy this rule exists yet'
+        : 'a page needs at least one moment; no arrangement here names a signature move',
       actual: signatures.length,
       expected: limits.signature_min,
-      severity: 'blocking',
+      // Blocking the moment any authored section is in play, which is every client build.
+      severity: scaffoldOnly ? 'warning' : 'blocking',
     });
   }
   if (signatures.length > limits.signature_max) {

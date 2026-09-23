@@ -13,3 +13,5 @@ blob-report/
 fixtures/**/dist/
 dist-site/
 build/
+artifacts/
+dist-e2e/
