@@ -11,3 +11,5 @@ blob-report/
 .lighthouseci/
 .astro/
 fixtures/**/dist/
+dist-site/
+build/

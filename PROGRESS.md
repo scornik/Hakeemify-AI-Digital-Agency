@@ -434,3 +434,78 @@ guessing "premium" for a budget operator misrepresents a business to its own cus
 voice. The stage returns `WAITING_FOR_OWNER` and does not advance, so resuming re-enters the same
 stage with the answer. `resume` refuses a run that is not waiting, so an answer cannot be
 silently dropped.
+
+---
+
+## P5 — Renderer + scaffold sections
+
+**DoD:** `pnpm --filter @ada/library run build:fixture` exits 0; every section root carries a
+resolvable `data-sd-path`; the fixture build ships ≤ 180 kB JS measured from the build manifest;
+reduced motion runs nothing. ✅ — 14 tests. The fixture site ships **zero** bytes of JavaScript.
+
+Delivered: the Astro renderer (`astro/`), five `service_clarity` scaffold sections with
+manifests, `scripts/build-site.mjs` emitting the build manifest the gate reads, and
+`scripts/compile-tokens.mjs` folded into the site build.
+
+### Decisions
+
+**The section root is stamped by the page, not by the section.** `data-sd-id` and `data-sd-path`
+are what the gate, the repair loop, telemetry and the post-V1 editor all address sections by. A
+section that rendered without them is invisible to every one of those, which is worse than one
+that failed to render outright — so the stamp is structural rather than a convention a section
+author could forget. Sections stamp their own *fields*, and a test walks every stamped pointer
+back to the SiteDefinition and fails if one does not resolve.
+
+**The renderer has no default site.** `loadRenderInput` throws when `ADA_SITE_DEFINITION`,
+`ADA_FACTS` or `ADA_TOKENS_CSS` is unset. A renderer with a fallback fixture is a renderer that
+can ship one by accident.
+
+**A slot that cannot be resolved throws.** No placeholder, no empty string, no "TBC". The
+alternative is a page that ships with a plausible-looking blank where a claim should be, which is
+exactly what the placeholder scan exists to catch one layer later — and catching it at render
+time is cheaper and more precise. `slotAsset` additionally refuses an asset with no
+`grade_id`, so `ungraded_asset` cannot reach the gate as a surprise.
+
+**Astro is a devDependency, and the licence gate is what noticed.** Adding it as a *production*
+dependency of `@ada/library` pulled its whole build tree into the shipped closure, and the gate
+failed on fourteen packages — including `@img/sharp-*`, which is `Apache-2.0 AND
+LGPL-3.0-or-later` and denied outright. Two things were wrong, both mine: Astro is a static site
+generator that runs at build time and emits HTML, so it never reaches a client and belongs in
+`devDependencies`; and `sharp` is an **optional** dependency of Astro, used only by its image
+optimisation service, which we do not use because art direction grades and reference renders are
+produced at library build time. It is excluded via `ignoredOptionalDependencies`, and Astro is
+configured with `passthroughImageService()`. No policy was widened and no exception was added —
+the gate found a modelling error and the model was corrected.
+
+**The scaffolds ship zero JavaScript, and that is asserted rather than hoped for.** The FAQ is a
+native `<details name>` group: an accordion with exclusive-open behaviour, keyboard support and
+screen-reader semantics, at zero kilobytes, where a Radix accordion island would cost ~53 kB
+gzipped to do the same job less well. The test asserts `js_bytes_by_route` is exactly `[0]` and
+that the page references no scripts at all, so the first island to appear will have to justify
+itself against a number.
+
+**`assets/sections/<family>/<variant>/` is the canonical home for a section component, not
+`astro/sections/`.** The manifest drift check resolves `files[]` relative to the manifest
+directory, so a component living anywhere else is a component nothing validates. The first
+attempt kept both and the drift check caught the duplicate immediately.
+
+**Shared renderer helpers are a package export, not a relative import.** The drift check flagged
+`../../../../astro/lib/slots.js` as an undeclared file, correctly: declaring shared
+infrastructure in five section manifests would assert that each section owns a copy of it. They
+are exposed as `@ada/library/render` and declared as a dependency instead.
+
+**The build manifest counts only scripts a page actually references.** An unreferenced chunk in
+the output is dead weight on disk, not bytes a visitor pays for; a chunk loaded by two pages is
+counted against both. Measuring from the manifest rather than from transfer size is what makes
+the budget exact and independent of compression settings.
+
+**The sitemap and robots.txt are generated from the SiteDefinition, not from a crawl.** The
+routes are already known. A sitemap that disagreed with the definition would be a gate failure,
+so generating it from the same source removes the disagreement rather than detecting it.
+
+**Residual gap, stated plainly:** the reduced-motion assertion in this milestone is the *static*
+half — the kill switch is present in the document, and the build ships no JavaScript, so there is
+nothing that could animate. The browser-side assertion (`document.getAnimations()` under
+`reducedMotion: 'reduce'`) needs a real browser and belongs to the gate, which owns browser
+execution; it runs in P6's end-to-end rather than in the unit suite, because a unit run that
+requires a built site and a browser binary is a unit run that gets skipped.

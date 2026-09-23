@@ -9,20 +9,29 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "default": "./dist/src/index.js"
+    },
+    "./render": {
+      "types": "./dist/src/render/index.d.ts",
+      "default": "./dist/src/render/index.js"
     }
   },
   "scripts": {
     "test": "vitest run",
     "grade": "node bin/library-grade.mjs",
-    "typecheck": "tsc --build"
+    "typecheck": "tsc --build",
+    "tokens": "node scripts/compile-tokens.mjs",
+    "build:site": "node scripts/build-site.mjs",
+    "build:fixture": "tsc --build && node scripts/build-site.mjs --tokens=build/design-systems/reference_v1/tokens.css"
   },
   "dependencies": {
     "@ada/contract": "workspace:*",
-    "zod": "4.6.5"
+    "zod": "4.6.5",
+    "@ada/library": "workspace:*"
   },
   "devDependencies": {
-    "js-yaml": "5.4.2",
     "@types/js-yaml": "4.0.9",
+    "astro": "^7.3.3",
+    "js-yaml": "5.4.2",
     "ts-morph": "28.0.0"
   }
 }

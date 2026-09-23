@@ -1,0 +1,57 @@
+---
+/**
+ * SCAFFOLD. `status: scaffold`, `grade: ungraded`, no `signature_move`.
+ *
+ * This exists so the pipeline is testable end to end; it is not a design deliverable, and it is
+ * excluded from the eligible set of any build that is not a fixture build. Authoring the real
+ * hero — five arrangements, two reviewers, the extra rubric its family carries — is P7, and
+ * human.
+ */
+import { fieldAttrs, slotAsset, slotText, type SlotContext } from '@ada/library/render';
+import type { SectionInstance, SiteDefinition } from '@ada/library/render';
+
+interface Props {
+  section: SectionInstance;
+  pageId: string;
+  definition: SiteDefinition;
+  facts: Record<string, { id: string; value: unknown; quotable: boolean }>;
+}
+
+const { section, pageId, definition, facts } = Astro.props as Props;
+const ctx: SlotContext = { definition, facts, pageId, instanceId: section.instance_id };
+
+const headline = slotText(ctx, section.slots, 'headline');
+const standfirst = slotText(ctx, section.slots, 'standfirst');
+const media = slotAsset(ctx, section.slots, 'media');
+---
+
+<div class="hero">
+  <h1 {...fieldAttrs(ctx, 'headline')}>{headline}</h1>
+  <p class="standfirst" {...fieldAttrs(ctx, 'standfirst')}>{standfirst}</p>
+  <img
+    src={media.path}
+    width={media.width}
+    height={media.height}
+    alt={media.alt}
+    data-grade={media.grade_id}
+    fetchpriority="high"
+    {...fieldAttrs(ctx, 'media')}
+  />
+</div>
+
+<style>
+  .hero {
+    display: grid;
+    gap: var(--ds-space-2, 16px);
+  }
+  .hero h1 {
+    font-size: var(--ds-type-size-4, 2.5rem);
+    margin: 0;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: var(--ds-type-size-1, 1.15rem);
+    margin: 0;
+    max-width: 46ch;
+  }
+</style>

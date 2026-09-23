@@ -1,0 +1,53 @@
+---
+/** SCAFFOLD — see hero/service_statement.astro for what that means and what it is not. */
+import { fieldAttrs, slotList, slotText, type SlotContext } from '@ada/library/render';
+import type { SectionInstance, SiteDefinition } from '@ada/library/render';
+
+interface Props {
+  section: SectionInstance;
+  pageId: string;
+  definition: SiteDefinition;
+  facts: Record<string, { id: string; value: unknown; quotable: boolean }>;
+}
+
+const { section, pageId, definition, facts } = Astro.props as Props;
+const ctx: SlotContext = { definition, facts, pageId, instanceId: section.instance_id };
+
+const heading = slotText(ctx, section.slots, 'heading');
+const services = slotList(ctx, section.slots, 'services');
+---
+
+<h2 {...fieldAttrs(ctx, 'heading')}>{heading}</h2>
+<ul class="services" {...fieldAttrs(ctx, 'services')}>
+  {
+    services.map((service) => (
+      <li>
+        <h3>{String(service['name'])}</h3>
+        {service['summary'] && <p>{String(service['summary'])}</p>}
+      </li>
+    ))
+  }
+</ul>
+
+<style>
+  .services {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--ds-space-2, 16px);
+  }
+  .services h3 {
+    margin: 0 0 var(--ds-space-0-5, 4px);
+    font-size: var(--ds-type-size-1, 1.15rem);
+  }
+  .services p {
+    margin: 0;
+    color: var(--ds-color-fg-muted, #555);
+  }
+  @media (min-width: 48rem) {
+    .services {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+</style>

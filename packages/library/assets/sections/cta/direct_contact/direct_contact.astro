@@ -1,0 +1,53 @@
+---
+/** SCAFFOLD — see hero/service_statement.astro for what that means and what it is not. */
+import { fieldAttrs, slotText, type SlotContext } from '@ada/library/render';
+import type { SectionInstance, SiteDefinition } from '@ada/library/render';
+
+interface Props {
+  section: SectionInstance;
+  pageId: string;
+  definition: SiteDefinition;
+  facts: Record<string, { id: string; value: unknown; quotable: boolean }>;
+}
+
+const { section, pageId, definition, facts } = Astro.props as Props;
+const ctx: SlotContext = { definition, facts, pageId, instanceId: section.instance_id };
+
+const heading = slotText(ctx, section.slots, 'heading');
+const promise = slotText(ctx, section.slots, 'promise');
+const phone = slotText(ctx, section.slots, 'phone');
+const email = slotText(ctx, section.slots, 'email');
+
+// The number a visitor taps must be the number the registry holds, digit for digit; the gate
+// asserts the same thing from the other side (`trust.contact-parity`).
+const telHref = 'tel:' + phone.replace(/[^\d+]/g, '');
+const mailHref = 'mailto:' + email;
+---
+
+<h2 {...fieldAttrs(ctx, 'heading')}>{heading}</h2>
+<p {...fieldAttrs(ctx, 'promise')}>{promise}</p>
+<p class="actions">
+  <a rel="cta" href={telHref} {...fieldAttrs(ctx, 'phone')}>Call {phone}</a>
+  <a href={mailHref} {...fieldAttrs(ctx, 'email')}>Email the office</a>
+</p>
+
+<style>
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--ds-space-2, 16px);
+    margin: var(--ds-space-2, 16px) 0 0;
+  }
+  .actions a {
+    color: var(--ds-color-accent-fg, #fff);
+    background: var(--ds-color-accent-bg, #0b6);
+    padding: var(--ds-space-1, 8px) var(--ds-space-2, 16px);
+    border-radius: var(--ds-radius-default, 2px);
+    text-decoration: none;
+  }
+  .actions a:last-child {
+    background: transparent;
+    color: var(--ds-color-fg-primary, #111);
+    text-decoration: underline;
+  }
+</style>

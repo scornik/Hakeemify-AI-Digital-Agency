@@ -1,0 +1,77 @@
+# SCAFFOLD, not a design deliverable. `status: scaffold` keeps it out of every eligible set
+# that is not a fixture build (ARCHITECTURE §10); `grade: ungraded` and the absence of a
+# `signature_move` keep it out of the library proper. Authoring the real proof family —
+# arrangements, reviewers, the rubric at both content extremes — is P7, and human.
+name: proof/credential_bar
+type: registry:section
+title: Credential bar
+description: Scaffold. Renders the proof beat of the service_clarity fallback archetype.
+schema_version: 1
+family: proof
+status: scaffold
+novelty_class: credential_bar
+fallback: true
+
+files:
+  - { path: credential_bar.astro, type: registry:section }
+
+dependencies: ['@ada/library']
+registryDependencies: []
+
+serves_beats: [evidence]
+serves_rhythm_roles: [proof]
+requires:
+  - 'count(proof.credentials) >= 1'
+
+slots:
+  - slot: heading
+    required: true
+    source: { kind: generated, grounded_in: [], may_claim: false }
+    max_chars: 48
+  - slot: credentials
+    required: true
+    source: { kind: fact, query: proof.credentials }
+
+affinity:
+  industries: []
+
+design_compat:
+  systems: [reference_v1]
+
+composition:
+  density: dense
+  background_weight: dark
+  focal_weight: 2
+  approx_vh: 45
+  media_dependency: none
+  text_volume: { headline_max_chars: 48, body_max_chars: 240 }
+
+# tier_0 throughout: the scaffolds ship no JavaScript at all, so there is nothing to run under
+# reduced motion and nothing to count against the page budget.
+motion:
+  effect: poster_loop
+  pattern: none
+  tier: tier_0
+  trigger: load
+  density: 0
+  budget_ms: 0
+  main_thread_ms_est: 0
+  reduced_motion_fallback: poster
+
+budget: { js_kb: 0, blocks_lcp: false, requires_webgl: false }
+
+a11y:
+  interactive: false
+  reduced_motion_fallback: 'Nothing animates; the section is static markup.'
+  contrast_pairs:
+    - [fg.primary, bg.base]
+
+priors:
+  status: unproven
+  note: Scaffold. No belief either way.
+
+arrangements:
+  - id: inline-row
+    novelty_class: inline_credential_row
+    props: { wrap: true }
+    grade: ungraded

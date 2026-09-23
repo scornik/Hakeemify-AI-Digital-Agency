@@ -1,0 +1,76 @@
+# SCAFFOLD, not a design deliverable. `status: scaffold` keeps it out of every eligible set
+# that is not a fixture build (ARCHITECTURE §10); `grade: ungraded` and the absence of a
+# `signature_move` keep it out of the library proper. Authoring the real services family —
+# arrangements, reviewers, the rubric at both content extremes — is P7, and human.
+name: services/plain_list
+type: registry:section
+title: Plain service list
+description: Scaffold. Renders the services beat of the service_clarity fallback archetype.
+schema_version: 1
+family: services
+status: scaffold
+novelty_class: plain_list
+fallback: true
+
+files:
+  - { path: plain_list.astro, type: registry:section }
+
+dependencies: ['@ada/library']
+registryDependencies: []
+
+serves_beats: [mechanism]
+serves_rhythm_roles: [explanation]
+requires: []
+
+slots:
+  - slot: heading
+    required: true
+    source: { kind: generated, grounded_in: [], may_claim: false }
+    max_chars: 48
+  - slot: services
+    required: true
+    source: { kind: fact, query: services }
+
+affinity:
+  industries: []
+
+design_compat:
+  systems: [reference_v1]
+
+composition:
+  density: medium
+  background_weight: light
+  focal_weight: 1
+  approx_vh: 60
+  media_dependency: none
+  text_volume: { headline_max_chars: 48, body_max_chars: 280 }
+
+# tier_0 throughout: the scaffolds ship no JavaScript at all, so there is nothing to run under
+# reduced motion and nothing to count against the page budget.
+motion:
+  effect: poster_loop
+  pattern: none
+  tier: tier_0
+  trigger: load
+  density: 0
+  budget_ms: 0
+  main_thread_ms_est: 0
+  reduced_motion_fallback: poster
+
+budget: { js_kb: 0, blocks_lcp: false, requires_webgl: false }
+
+a11y:
+  interactive: false
+  reduced_motion_fallback: 'Nothing animates; the section is static markup.'
+  contrast_pairs:
+    - [fg.primary, bg.base]
+
+priors:
+  status: unproven
+  note: Scaffold. No belief either way.
+
+arrangements:
+  - id: two-column
+    novelty_class: two_column_list
+    props: { columns: 2 }
+    grade: ungraded

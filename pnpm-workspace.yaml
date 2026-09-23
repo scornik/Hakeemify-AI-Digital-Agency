@@ -1,4 +1,20 @@
 packages:
   - 'packages/*'
+
+# esbuild needs its postinstall to place the platform binary; Astro's build depends on it.
+onlyBuiltDependencies:
+  - esbuild
+
 minimumReleaseAgeExclude:
   - prettier@3.9.9
+
+# sharp is an OPTIONAL dependency of astro, used only by Astro's built-in image optimisation
+# service. We do not use it: art direction grades and reference renders are produced at library
+# build time, and Astro is configured with the passthrough image service. Excluding it also
+# keeps `@img/sharp-*` (Apache-2.0 AND LGPL-3.0-or-later) out of the tree entirely, which the
+# licence gate denies.
+ignoredOptionalDependencies:
+  - sharp
+
+allowBuilds:
+  esbuild: true

@@ -1,0 +1,62 @@
+---
+/**
+ * The document shell. The renderer owns head, fonts, meta and structured data; a section never
+ * writes into the head, so no section can change the page's identity.
+ *
+ * `tokens.css` is inlined: it is small, it is per-design-system, and it carries the
+ * reduced-motion kill switch, which must apply whether or not any script runs (ARCHITECTURE §1.2).
+ */
+import type { PageDefinition, SiteDefinition } from '@ada/library/render';
+
+interface Props {
+  definition: SiteDefinition;
+  page: PageDefinition;
+  tokensCss: string;
+}
+
+const { definition, page, tokensCss } = Astro.props;
+const robots = [page.seo.robots.index ? 'index' : 'noindex', page.seo.robots.follow ? 'follow' : 'nofollow'].join(',');
+---
+
+<!doctype html>
+<html lang={definition.site.locale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{page.seo.title}</title>
+    <meta name="description" content={page.seo.description} />
+    <link rel="canonical" href={page.seo.canonical} />
+    <meta name="robots" content={robots} />
+    <meta property="og:title" content={page.seo.og.title} />
+    <meta property="og:description" content={page.seo.og.description} />
+    {page.seo.og.image && <meta property="og:image" content={page.seo.og.image} />}
+    <meta property="og:type" content={page.seo.og.type ?? 'website'} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href="/favicon.svg" />
+    <meta name="theme-color" content="#1d2a24" />
+    <style set:html={tokensCss}></style>
+    <style>
+      body { margin: 0; background: var(--ds-color-bg-base, #fff); color: var(--ds-color-fg-primary, #111); font-family: system-ui, sans-serif; }
+      main > section { padding-block: var(--ds-space-5, 40px); padding-inline: max(16px, var(--ds-space-3, 24px)); }
+      img { max-width: 100%; height: auto; }
+      a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--ds-color-accent-bg, #0b6); outline-offset: 2px; }
+      .wrap { max-width: var(--ds-layout-max-width, 1180px); margin-inline: auto; }
+    </style>
+    {page.seo.schema_org.map((block) => (
+      <script type="application/ld+json" set:html={JSON.stringify(block.data)} />
+    ))}
+  </head>
+  <body>
+    <header>
+      <nav aria-label="Primary" class="wrap">
+        <slot name="nav" />
+      </nav>
+    </header>
+    <main>
+      <slot />
+    </main>
+    <footer class="wrap">
+      <slot name="footer" />
+    </footer>
+  </body>
+</html>

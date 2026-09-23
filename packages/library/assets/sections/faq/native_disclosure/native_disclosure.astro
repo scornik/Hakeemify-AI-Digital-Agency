@@ -1,0 +1,54 @@
+---
+/**
+ * SCAFFOLD — see hero/service_statement.astro for what that means and what it is not.
+ *
+ * Islands policy, first tier (ARCHITECTURE §6): a native `<details name>` group is an accordion
+ * with exclusive-open behaviour, keyboard support and screen-reader semantics, at zero
+ * kilobytes. A Radix accordion island costs about 53 kB gzipped to do the same job less well.
+ */
+import { fieldAttrs, slotList, slotText, type SlotContext } from '@ada/library/render';
+import type { SectionInstance, SiteDefinition } from '@ada/library/render';
+
+interface Props {
+  section: SectionInstance;
+  pageId: string;
+  definition: SiteDefinition;
+  facts: Record<string, { id: string; value: unknown; quotable: boolean }>;
+}
+
+const { section, pageId, definition, facts } = Astro.props as Props;
+const ctx: SlotContext = { definition, facts, pageId, instanceId: section.instance_id };
+
+const heading = slotText(ctx, section.slots, 'heading');
+const questions = slotList(ctx, section.slots, 'questions');
+const groupName = 'faq-' + section.instance_id;
+---
+
+<h2 {...fieldAttrs(ctx, 'heading')}>{heading}</h2>
+<div class="faq" {...fieldAttrs(ctx, 'questions')}>
+  {
+    questions.map((entry) => (
+      <details name={groupName}>
+        <summary>{String(entry['question'])}</summary>
+        <p>{String(entry['answer'])}</p>
+      </details>
+    ))
+  }
+</div>
+
+<style>
+  .faq {
+    display: grid;
+    gap: var(--ds-space-1, 8px);
+    max-width: 68ch;
+  }
+  .faq summary {
+    cursor: pointer;
+    padding-block: var(--ds-space-1, 8px);
+    font-weight: 600;
+  }
+  .faq p {
+    margin: 0 0 var(--ds-space-1, 8px);
+    color: var(--ds-color-fg-muted, #555);
+  }
+</style>

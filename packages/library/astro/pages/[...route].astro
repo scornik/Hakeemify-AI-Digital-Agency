@@ -1,0 +1,77 @@
+---
+/**
+ * Every page of the site, from the SiteDefinition.
+ *
+ * The section root is stamped **here**, not by the section, so `data-sd-id` and `data-sd-path`
+ * are structural rather than a convention a section author could forget. The gate, the repair
+ * loop, telemetry and the post-V1 editor all address sections by these ids, so a section that
+ * rendered without them would be invisible to every one of them.
+ */
+import Site from '../layouts/Site.astro';
+import { loadRenderInput, sectionPath, type PageDefinition, type SiteDefinition } from '@ada/library/render';
+import { resolveVariant } from '../lib/registry.js';
+
+export async function getStaticPaths() {
+  const input = loadRenderInput();
+  return Object.entries(input.definition.pages).map(([pageId, page]) => ({
+    // Astro's rest param wants the path without its leading slash; '' is the home page.
+    params: { route: page.route === '/' ? undefined : page.route.replace(/^\//, '') },
+    props: { pageId, page, definition: input.definition, facts: input.facts, tokensCss: input.tokensCss },
+  }));
+}
+
+interface Props {
+  pageId: string;
+  page: PageDefinition;
+  definition: SiteDefinition;
+  facts: Record<string, { id: string; value: unknown; quotable: boolean }>;
+  tokensCss: string;
+}
+
+const { pageId, page, definition, facts, tokensCss } = Astro.props as Props;
+
+const navPages = Object.entries(definition.pages).map(([id, p]) => ({ id, route: p.route, title: p.seo.og.title }));
+const legalPages = Object.entries(definition.pages).filter(([id]) => id === definition.legal['privacy_page']);
+const businessName = String(facts['f_legal_name']?.value ?? definition.site.id);
+const buildYear = new Date(Number(process.env['ADA_BUILD_YEAR'] ?? new Date().getFullYear()), 0).getFullYear();
+---
+
+<Site definition={definition} page={page} tokensCss={tokensCss}>
+  <Fragment slot="nav">
+    {navPages
+      .filter((entry) => entry.route === '/')
+      .map((entry) => (
+        <a href={entry.route}>{businessName}</a>
+      ))}
+  </Fragment>
+
+  {page.order.map((instanceId) => {
+    const section = page.sections[instanceId];
+    if (!section) {
+      throw new Error(`page ${pageId} orders "${instanceId}", which is not in its sections`);
+    }
+    const Component = resolveVariant(section.variant_id);
+    return (
+      <section
+        id={instanceId}
+        data-sd-id={instanceId}
+        data-sd-path={sectionPath(pageId, instanceId)}
+        data-sd-variant={section.variant_id}
+        data-sd-arrangement={section.arrangement_id}
+        data-density={section.computed.density}
+        data-focal={String(section.computed.focal_weight)}
+      >
+        <div class="wrap">
+          <Component section={section} pageId={pageId} definition={definition} facts={facts} />
+        </div>
+      </section>
+    );
+  })}
+
+  <Fragment slot="footer">
+    {legalPages.map(([, p]) => (
+      <a href={p.route}>{p.seo.og.title}</a>
+    ))}
+    <p>&copy; {buildYear} {businessName}</p>
+  </Fragment>
+</Site>

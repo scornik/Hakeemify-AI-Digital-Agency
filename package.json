@@ -18,7 +18,8 @@
     "db:down": "docker compose down",
     "check:licences": "node scripts/check-licences.mjs",
     "library:grade": "node packages/library/bin/library-grade.mjs",
-    "test:cov": "vitest run --coverage"
+    "test:cov": "vitest run --coverage",
+    "build:fixture": "pnpm --filter @ada/library run build:fixture"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -29,5 +30,13 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.70.1",
     "vitest": "5.0.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ],
+    "ignoredOptionalDependencies": [
+      "sharp"
+    ]
   }
 }
