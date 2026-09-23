@@ -1,0 +1,32 @@
+/*
+ * `parallax_subtle` — tier A, and 0 kB of JS.
+ *
+ * A scroll-driven CSS animation where the browser supports one. There is no JS file because
+ * there is nothing for JS to do: `animation-timeline: view()` is the gesture, so the reduced
+ * motion arm is "1:1 with the gesture", which here means no displacement at all.
+ */
+@layer recipes {
+  @supports (animation-timeline: view()) {
+    @keyframes ada-parallax-subtle {
+      from {
+        transform: translate3d(0, 0, 0);
+      }
+      to {
+        transform: translate3d(0, -6%, 0);
+      }
+    }
+
+    [data-motion='parallax_subtle'] {
+      animation: ada-parallax-subtle linear both;
+      animation-timeline: view();
+      will-change: transform;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      [data-motion='parallax_subtle'] {
+        animation: none;
+        transform: none;
+      }
+    }
+  }
+}

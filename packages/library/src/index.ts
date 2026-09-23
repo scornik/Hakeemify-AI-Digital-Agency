@@ -11,3 +11,4 @@ export const PACKAGE_NAME = '@ada/library';
 export * from './paths.js';
 export * from './tokens/index.js';
 export * from './manifest/index.js';
+export * from './motion/index.js';

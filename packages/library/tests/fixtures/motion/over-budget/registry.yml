@@ -1,0 +1,25 @@
+# FIXTURE — an effect that exceeds its declared ceiling.
+#
+# `fat_effect` declares 120 gz bytes and ships a source that does not compress anywhere near
+# that. The byte-ceiling check must fail. `thin_effect` is beside it and must pass, so the
+# failure is attributable to one effect rather than to the whole registry.
+schema_version: 1
+
+effects:
+  - id: thin_effect
+    tier: tier_a
+    status: implemented
+    motion_kind: programmatic
+    reduced_motion_fallback: instant
+    allowed_properties: [opacity]
+    sources: [thin.js]
+    max_gz_bytes: 4096
+
+  - id: fat_effect
+    tier: tier_a
+    status: implemented
+    motion_kind: programmatic
+    reduced_motion_fallback: instant
+    allowed_properties: [opacity]
+    sources: [fat.js]
+    max_gz_bytes: 120

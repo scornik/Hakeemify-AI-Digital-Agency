@@ -1,0 +1,18 @@
+/* `reveal_fade` — compositor-only. opacity and transform, nothing else. */
+@layer recipes {
+  [data-motion='reveal_fade'] {
+    transition-property: opacity, transform;
+    transition-duration: var(--ds-motion-duration-base, 420ms);
+    transition-timing-function: var(--ds-motion-easing-standard, ease-out);
+  }
+
+  [data-motion='reveal_fade'][data-motion-state='out'] {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+
+  [data-motion='reveal_fade'][data-motion-state='in'] {
+    opacity: 1;
+    transform: none;
+  }
+}

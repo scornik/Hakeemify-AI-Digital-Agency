@@ -1,0 +1,86 @@
+# Motion registry — a CLOSED vocabulary (SYNTHESIS §7.3, ARCHITECTURE §1.1).
+#
+# The model never writes an animation. It picks an effect id, and an effect id resolves to a
+# tier, a set of properties the compositor can carry on its own, a measured byte ceiling, and a
+# reduced-motion arm. Anything not in this file cannot be selected, which is the same mechanism
+# as the per-build JSON Schema: not a rule the model is asked to follow, a grammar that does not
+# contain the alternative.
+#
+# `max_gz_bytes` is checked against the real gzipped size of `sources` on every build. A ceiling
+# nobody measures is a comment. The measurement is taken over the **un-minified** source, comments
+# and all, which over-states what a client actually downloads; the ceilings below are set with
+# that in mind, so the number is conservative rather than optimistic.
+
+schema_version: 1
+$description: >-
+  Named effects, their tiers and their measured ceilings. Tier runtimes (motion/mini, GSAP, OGL)
+  are budgeted per tier in code; the numbers here are each effect's own shipped source.
+
+effects:
+  - id: poster_loop
+    tier: tier_0
+    status: implemented
+    $description: >-
+      A pre-rendered WebM/AV1 loop with a poster. ARCHITECTURE §1.1 makes this the DEFAULT for
+      ambient and abstract motion, because it is the only tier that cannot regress: there is no
+      JS, so there is nothing to budget and nothing to fail.
+    motion_kind: loop
+    reduced_motion_fallback: poster
+    allowed_properties: []
+    sources: []
+    max_gz_bytes: 0
+
+  - id: reveal_fade
+    tier: tier_a
+    status: implemented
+    $description: >-
+      Opacity and a short translate on first intersection. The JS flips a `data-motion-state`
+      attribute; every animated property is in the stylesheet.
+    motion_kind: programmatic
+    reduced_motion_fallback: instant
+    allowed_properties: [opacity, transform]
+    sources:
+      - effects/reveal-fade.js
+      - effects/reveal-fade.css
+    max_gz_bytes: 1536
+
+  - id: parallax_subtle
+    tier: tier_a
+    status: implemented
+    $description: >-
+      A scroll-driven transform via `animation-timeline: view()`. No JS at all; the gesture is
+      the timeline, so the reduced-motion arm is a 1:1 read of it, which is no displacement.
+    motion_kind: gesture
+    reduced_motion_fallback: one_to_one
+    allowed_properties: [transform]
+    sources:
+      - effects/parallax-subtle.css
+    max_gz_bytes: 1024
+
+  - id: pin_scroll_story
+    tier: tier_b
+    status: planned
+    $description: >-
+      Pinning and a labelled timeline (GSAP core + ScrollTrigger, 46.5 kB gz). Declared here so
+      the vocabulary is closed and the budget is recorded; the implementation lands with the
+      renderer in P5. Measured bytes are 0 until then, and the check says so rather than
+      pretending the ceiling has been tested.
+    motion_kind: gesture
+    reduced_motion_fallback: one_to_one
+    allowed_properties: [opacity, transform]
+    sources: []
+    max_gz_bytes: 4096
+
+  - id: shader_plane
+    tier: tier_c
+    status: planned
+    $description: >-
+      The single allowed WebGL section: OGL or a raw shader plane, below the fold, lazy-mounted
+      on intersection, poster until the first frame. ARCHITECTURE §11.4 has not decided whether
+      tier C ships in V1 at all; the entry exists so the registry is complete, not because the
+      decision has been made.
+    motion_kind: loop
+    reduced_motion_fallback: poster
+    allowed_properties: [opacity]
+    sources: []
+    max_gz_bytes: 15360

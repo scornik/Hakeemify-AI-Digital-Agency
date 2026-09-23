@@ -1,0 +1,14 @@
+# FIXTURE — a loop that claims it reduces to "instant". SYNTHESIS §7.3's tri-mode reading says
+# a loop reduces to a poster; an effect that never stops cannot be jumped to its end state,
+# because it has none. The registry must refuse to load.
+schema_version: 1
+
+effects:
+  - id: wrong_arm
+    tier: tier_0
+    status: implemented
+    motion_kind: loop
+    reduced_motion_fallback: instant
+    allowed_properties: []
+    sources: []
+    max_gz_bytes: 0
