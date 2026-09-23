@@ -9,7 +9,7 @@ Running log of milestones, their definition of done, and decisions taken. Author
 | P0 Scaffold | ✅ done | `pnpm verify` |
 | P1 `contract` | ✅ done | `pnpm --filter @ada/contract test` |
 | P2 `gate` | ⏳ not started | `pnpm --filter @ada/gate test` |
-| P3 `library` infra | ⏳ not started | `pnpm --filter @ada/library test` |
+| P3 `library` infra | ✅ done | `pnpm --filter @ada/library test` |
 | P4 `pipeline` | ⏳ not started | `pnpm --filter @ada/pipeline test` |
 | P5 Renderer + scaffold sections | ⏳ not started | `pnpm --filter @ada/library build:fixture` |
 | P6 End to end | ⏳ not started | `pnpm e2e:fixture` |
@@ -189,6 +189,174 @@ that the union covers every static check, so no check ships untested.
 **Uniqueness is asserted against the SiteDefinition, not by crawling.** Titles, descriptions,
 sitemap membership and internal link targets are all decidable before anything is deployed,
 because the routes come from the contract.
+
+---
+
+## P3 — `library` infrastructure
+
+**DoD:** `pnpm --filter @ada/library test` exits 0, and `pnpm verify` exits 0 at the root. ✅ —
+122 tests. Infrastructure only: no graded variant, no `signature_move`, no rubric boolean, no ELO.
+`assets/sections/` is empty on purpose, and a test asserts it stays that way
+(`status: active` count is zero) so nothing machine-authored can be mistaken for the library.
+
+Delivered:
+
+**Token compiler** — DTCG-shaped YAML → static `tokens.css`, the whole SYNTHESIS §7.1 pipeline:
+seeds → algorithms (10-step palette, `base·ratio^i` type scale, `unit·step` spacing, radius) →
+v4 §3's seven semantic roles as ramp indices → conditions table (`dark`, `reduced_motion`,
+`forced_colors`, `print`, `touch`) → `--ds-*` custom properties under `@layer reset, base, tokens,
+recipes`. Contrast is WCAG 2.x, computed here with our own sRGB luminance maths, and a failure
+**fails the build**. One reference design system, `reference_v1`, `status: reference`.
+
+**Manifest schema + drift check** — a superset of the shadcn registry item, with v4 §8's layout
+genome and §11's authoring standard. Every `requires` string is parsed with `parsePredicate` at
+validation time; every id is checked against the contract's strict grammar at boot; problems
+accumulate. The ts-morph check extracts the `.astro` frontmatter fence and parses it as
+TypeScript. Eligibility excludes `scaffold` from any build that is not a fixture build.
+
+**Reference-render harness** — pure addressing, a Zod storage contract for `index.json`, a
+resolver and a coverage report. No Playwright: the gate owns browser execution.
+
+**Grading CLI** — `pnpm library:grade`, which collects and refuses to invent.
+
+**Motion registry** — the four tiers, five named effects, and a `zlib` byte-ceiling check.
+
+### Decisions
+
+**`reference` is a fourth design-system status, and it cannot widen anything.** v4 §12 lists
+`active | frozen | retired`. The reference design system is infrastructure input for a compiler,
+not a design decision, and calling it `active` would have made it selectable by a real build.
+Eligibility filters *on* `active`, so adding a value to the enum cannot widen what may be chosen —
+it can only exclude. Same reasoning for `scaffold` on manifests, which ARCHITECTURE §10 already
+names.
+
+**Contrast is checked in every condition that moves either side of a pair, not only in the base
+scheme.** The spec says "every declared foreground/background pair". A dark scheme that quietly
+drops below 4.5:1 is the normal way a palette fails and is invisible to a base-only check, so
+there is a fixture whose light pair is 15:1 and whose dark pair is 2:1, and it does not compile.
+Forced-colors pairs resolve to system colours (`Canvas`, `CanvasText`), which have no computable
+ratio; those are recorded as *skipped with a reason* rather than passed. Asserting over a
+palette the user chose would be theatre.
+
+**The palette seed contributes hue and saturation; lightness comes from the curve.** Two seeds
+with the same hue and different lightness therefore produce the same ramp. That is the point — an
+author picks a colour, not a position on a scale — but it is surprising enough to be worth
+stating, and it is what makes a role an index rather than a value.
+
+**Token names are CSS-safe rather than faithful.** Step `-1` becomes `n1` and `0.5` becomes `0-5`
+(`--ds-type-size-n1`, `--ds-space-0-5`). Both are legal in a custom property; both are a nuisance
+to grep, and the gate greps token names.
+
+**Roles are emitted as resolved values, not as `var()` indirection.** ARCHITECTURE §6 requires
+zero runtime token resolution, and a condition that swaps a role to a system colour
+(`forced_colors: CanvasText`) has no palette variable to point at. One mechanism for every
+condition beat a debuggable one that needs a special case.
+
+**`name` in the manifest carries the strict id grammar.** shadcn registry names are free strings.
+Ours are `family/variant`, and `family` must agree with the family half. The alternative — a
+kebab slug beside a variant id — is two ids for one thing, which is two ids that can drift.
+
+**v4 §11's entry gate is a schema rule, not a review convention.** An `active` manifest must carry
+an authoring record, the family's minimum arrangements, a full rubric on each, the family's extra
+rubric, and the family's reviewer count. A `scaffold` may carry *none* of it and must be
+`ungraded` throughout — a scaffold that could hold a grade is a scaffold that could be mistaken
+for library content, which is the one failure the boundary exists to prevent. The accept branch of
+that gate is exercised from a synthetic object built inside the test process and named
+`NOT_A_REAL_GRADE`; no `signature_move`, `negative_example` or rubric boolean was written to any
+asset file.
+
+**`files[].path` is relative to the manifest's own directory.** shadcn's paths are
+repo-relative. A manifest that describes its own folder moves without editing, and the import
+scan resolves relative specifiers against the file that wrote them.
+
+**The import scan follows type-only imports and resolves `.js` to `.ts`.** A type-only import is
+still a real coupling to a real package, and in TypeScript ESM `./lib/format.js` means
+`./lib/format.ts` on disk. `node:` and `astro:` specifiers are ignored: Astro's virtual modules
+are supplied by the renderer, so there is nothing for a manifest to declare. Unused dependencies
+are reported but off by default — that is the harmless direction of the same drift.
+
+**The reference key's arrangement half is qualified as `family/variant#arrangement`.**
+ARCHITECTURE §7.4 and the gate checklist both key on the triple *(arrangement, design_system,
+project)*, but the contract's `ARRANGEMENT_ID` (`portrait-left`) is only unique within a variant.
+Rather than silently widen the key to four fields, the arrangement id carries its variant. The key
+stays the triple the spec names and is unambiguous. **This is a reading of an under-specified
+line, and it is the one place in P3 where a later worker might reasonably have chosen
+differently.**
+
+**A missing reference render is a result; an unaddressable key is an exception.** The gate's job
+on a gap is to record `needs_review` and carry on gathering the bundle. A malformed id is a
+programming error and throws. Likewise, an absent `index.json` reads as an empty index — before
+P5 renders anything there is no index, and throwing would make "nothing rendered yet"
+indistinguishable from "the index is corrupt".
+
+**The grading CLI's refusal lives in a plain `.mjs` that imports nothing first.** If the check sat
+behind an `import`, a missing `dist/` would turn "refuses to run" into "crashes" — and a crash is
+not a refusal, it is an outcome somebody works around. It also means the DoD test needs no build
+step, so the assertion runs on every test invocation rather than when someone remembers. Exit
+code 2, and the message names which condition tripped.
+
+**The grading CLI does not touch `signature_move` or `negative_example`.** Those are *authoring*
+fields, recorded when the variant is authored, not when it is graded. Folding them into the
+grading flow would have put an agent-runnable CLI one prompt away from filling them in. It also
+offers no default answer anywhere: a blank response to a rubric item is re-asked, never taken as a
+no, and a test asserts the prompts are `[y/n]` and never `[Y/n]`. A tool that nudges a tired
+reviewer towards `y` grades for them.
+
+**Grades append to a JSONL ledger, one line per reviewer.** v4 §11 wants two reviewers per
+variant; a file per arrangement would have made the second reviewer an edit to the first's
+record, which is the shape in which a disagreement quietly disappears.
+
+**The reduced-motion arm is derived from the kind of motion, not declared freely.** SYNTHESIS
+§7.3's tri-mode reading is a function: programmatic → instant, gesture → 1:1, loop → poster. An
+effect pairing a kind with a different arm does not load. `respects_prefers_reduced_motion` is
+*not* a manifest field at all — v4 declares it literal and unsettable, and a boolean nobody may
+set to false is better expressed by not existing.
+
+**Per-effect byte ceilings are measured over un-minified source, at gzip level 9.** That
+over-states what a client downloads, which is the safe direction; the level is fixed because
+zlib's default is a property of whoever compiled node, and a budget that differs between a laptop
+and CI is not a budget. Two effects were re-declared upwards (700 → 1536, 400 → 1024) when the
+check found the original guesses too tight — the numbers are budgets with headroom, not a ratchet
+set to the current size, and both sit far under tier A's 10,752-byte runtime.
+
+**Two of the five motion effects are `status: planned`, and the check reports them as
+`not_measured` rather than as a pass.** `pin_scroll_story` (tier B) and `shader_plane` (tier C)
+have no implementation until P5 — and ARCHITECTURE §11.4 has not decided whether tier C ships in
+V1 at all. They are in the registry so the vocabulary is closed; a ceiling nobody has measured
+should not read as a ceiling that has been met.
+
+**`literal` tokens exist beside DTCG's types, with a `string` escape hatch.** A shadow list and a
+`none` are raw CSS. Naming the escape hatch rather than leaving it implicit means a reviewer can
+see every place the compiler stops understanding a value.
+
+**The library's own drift checks run as tests, not as a separate CI step.** `pnpm verify` runs
+the suite, and the suite loads the real `assets/`, compiles the real design system, measures the
+real motion sources and runs the real import scan. Adding a `library:check` script would have
+given the same coverage a second, forgettable entry point; `pnpm library:grade` was added to the
+root scripts because the DoD names it, and every existing script is untouched.
+
+### Residual gaps, stated plainly
+
+- **`assets/sections/` is empty.** The brief permits `service_clarity` scaffold *sections*, but
+  the `.astro` files are P5's job, and a manifest whose `files[]` points at a file that does not
+  exist fails the very import check it would be demonstrating. The manifest and eligibility
+  plumbing that will classify them is done and tested against fixtures under
+  `tests/fixtures/library*/`; P5 moves a fixture-shaped manifest into `assets/sections/` beside
+  its `.astro` and nothing else changes.
+- **No `.astro` section variant is rendered by anything yet**, so the manifest's `composition`,
+  `budget` and `a11y` numbers are declarations no build has checked against a real render. P5 and
+  the gate close that loop.
+- **`references/index.json` does not exist**, because nothing has rendered a reference. The
+  harness reads that as an empty index and reports full coverage as missing, which is the honest
+  answer.
+- **The compositor-property audit is a narrow regex pass over CSS**, reading
+  `transition-property`, `will-change` and `@keyframes` declarations. It catches the mistake at
+  library-build time, where it is cheap. It does not prove the absence of a non-composited
+  animation — Lighthouse's `non-composited-animations = 0` does that in a real browser, and it
+  remains the authority.
+- **ELO is recorded, never computed.** There is no pairwise comparison tool and no percentile
+  check against `family_standards.elo_floor_percentile`. That needs a populated library to
+  compare within, so it belongs with P7.
 
 ---
 
