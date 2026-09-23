@@ -5,6 +5,7 @@ import { loadSite } from '../src/artifacts/fixture-site.js';
 import { STATIC_CHECKS, ALL_CHECKS } from '../src/checks/index.js';
 import { runChecks, runGate, assertRegistryWellFormed } from '../src/registry.js';
 import { GATE_POLICY_VERSION, JS_BUDGET_BYTES } from '../src/policy.js';
+import { runBrowserGate, runStaticGate, summariseResult } from '../src/runner.js';
 import type { CheckResult } from '../src/types.js';
 import { brokenContext, cleanContext } from './fixtures/context.js';
 
@@ -229,5 +230,47 @@ describe('site-broken', () => {
     expect(details).toContain('lorem ipsum');
     expect(details).toContain('TODO/TBD');
     expect(details).toContain('unresolved template token');
+  });
+});
+
+describe('the site runner', () => {
+  const site = {
+    root: fixture('site-clean'),
+    origin: ORIGIN,
+    siteDefinitionHash: 'a'.repeat(64),
+    jsBytesByRoute: { '/': 0, '/privacy': 0 },
+    allowedHosts: ['fonts.googleapis.com', 'fonts.gstatic.com'],
+    buildYear: 2026,
+  };
+
+  it('runs the static pass over a whole site and reports it green', () => {
+    const result = runStaticGate({ site, context: cleanContext });
+    expect(result.reports).toHaveLength(2);
+    expect(result.fatal).toEqual([]);
+    expect(result.canShip).toBe(true);
+    expect(summariseResult(result)).toMatch(/gate green/);
+  });
+
+  it('reports a site red when any one page is red', () => {
+    const result = runStaticGate({
+      site: { ...site, root: fixture('site-broken'), jsBytesByRoute: { '/': 320_000 } },
+      context: brokenContext,
+    });
+    expect(result.canShip).toBe(false);
+    expect(summariseResult(result)).toMatch(/gate red/);
+  });
+
+  it('errors rather than skipping when a project promised an artifact it did not gather', () => {
+    // The whole point of the two-pass split: a browser pass that produced nothing must fail
+    // loudly, not silently shrink to the checks that happened to have data.
+    const bundles = loadSite({ ...site, project: 'desktop-chrome' });
+    const result = runBrowserGate({ bundles, context: cleanContext });
+    expect(result.canShip).toBe(false);
+    const errored = result.reports
+      .flatMap((report) => report.checks)
+      .filter((check) => check.mode === 'error');
+    expect(errored.length).toBeGreaterThan(0);
+    expect(errored[0]?.message).toMatch(/promised by the run policy but not gathered/);
+    expect(result.reports[0]?.summary.score).toBeNull();
   });
 });

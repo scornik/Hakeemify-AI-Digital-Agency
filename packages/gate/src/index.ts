@@ -6,6 +6,7 @@ export * from './report.js';
 export * from './registry.js';
 export * from './policy.js';
 export * from './repair.js';
+export * from './runner.js';
 export * from './checks/index.js';
 export * from './artifacts/static-gatherer.js';
 export * from './artifacts/fixture-site.js';
