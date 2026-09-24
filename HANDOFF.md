@@ -1,8 +1,9 @@
 # Handoff — P7, the section library
 
-P0 through P6 are complete. `pnpm verify` is green (493 tests, 24 files) and `pnpm e2e:fixture`
-builds one business from its fact registry through all sixteen stages to a green gate, emitting
-`build-rationale.json` and `gap-report.json`.
+P0 through P6 are complete. `pnpm verify` is green (505 tests, 26 files) and `pnpm e2e:fixture`
+builds one business from its fact registry through all sixteen stages to a green gate — both the
+static pass and the browser pass across the five-project matrix — emitting `build-rationale.json`
+and `gap-report.json`.
 
 What is not done is the part that cannot be automated, and this document is about that.
 
@@ -85,9 +86,9 @@ three things you are adding.
 
 ```bash
 pnpm install
-pnpm verify                 # licences, format, lint, typecheck, 493 tests
+pnpm verify                 # licences, format, lint, typecheck, 505 tests
 pnpm build:fixture          # compile tokens, render the fixture site, emit the build manifest
-pnpm e2e:fixture            # the whole pipeline, end to end, to a green gate
+pnpm e2e:fixture            # the whole pipeline, end to end, both gate passes
 pnpm library:grade          # record a human grade — refuses to run without a TTY
 pnpm --filter @ada/library test
 ```
