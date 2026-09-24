@@ -1,0 +1,278 @@
+{
+  "schema_version": 1,
+  "site": {
+    "id": "ridgeline_roofing",
+    "tenant_id": "ada_demo",
+    "niche": "roofing",
+    "positioning": "local_trust",
+    "locale": "en-GB"
+  },
+  "pinned": {
+    "design_system": "reference_v1@1.0",
+    "art_direction": "quiet_authority@2",
+    "playbook": "roofing@4",
+    "library": "a7f31c2",
+    "gate_policy": "launch@1"
+  },
+  "pages": {
+    "home": {
+      "route": "/",
+      "archetype": "service_clarity",
+      "seo": {
+        "title": "Ridgeline Roofing \u2014 roofing and storm repair, Ashfield",
+        "description": "A four-person roofing crew working the same three valleys since 1998. Roof replacement, storm damage repair and gutter renewal across Ashfield.",
+        "canonical": "https://ridgelineroofing.example/",
+        "og": {
+          "title": "Ridgeline Roofing",
+          "description": "Roof replacement and storm repair in Ashfield since 1998.",
+          "image": "/og/home.png",
+          "type": "website"
+        },
+        "robots": {
+          "index": true,
+          "follow": true
+        },
+        "schema_org": [
+          {
+            "type": "LocalBusiness",
+            "data": {
+              "@context": "https://schema.org",
+              "@type": "RoofingContractor",
+              "name": "Ridgeline Roofing Ltd",
+              "telephone": "01632 960144",
+              "url": "https://ridgelineroofing.example/",
+              "address": {
+                "@type": "PostalAddress",
+                "streetAddress": "4 Kiln Lane",
+                "addressLocality": "Ashfield",
+                "postalCode": "NN12 8QP",
+                "addressCountry": "GB"
+              }
+            }
+          }
+        ]
+      },
+      "order": [
+        "s_hero",
+        "s_services",
+        "s_proof",
+        "s_faq",
+        "s_cta"
+      ],
+      "sections": {
+        "s_hero": {
+          "family": "hero",
+          "instance_id": "s_hero",
+          "variant_id": "hero/service_statement",
+          "arrangement_id": "stacked-left",
+          "schema_version": 1,
+          "slots": {
+            "headline": {
+              "kind": "generated",
+              "text": "Roofing for the three valleys, since 1998",
+              "grounded_in": [
+                "f_founded"
+              ]
+            },
+            "standfirst": {
+              "kind": "generated",
+              "text": "Replacement, storm repair and gutter renewal, by the same crew.",
+              "grounded_in": []
+            },
+            "media": {
+              "kind": "asset",
+              "asset_id": "crew_on_ridge"
+            }
+          },
+          "motion": {
+            "pattern": "none",
+            "tier": "tier_0",
+            "trigger": "load",
+            "density": 0,
+            "budget_ms": 0,
+            "main_thread_ms_est": 0,
+            "reduced_motion_fallback": "poster"
+          },
+          "computed": {
+            "intensity": 1.0,
+            "focal_weight": 3,
+            "density": "sparse",
+            "approx_vh": 86,
+            "background_weight": "image",
+            "is_signature": true
+          }
+        },
+        "s_services": {
+          "family": "services",
+          "instance_id": "s_services",
+          "variant_id": "services/plain_list",
+          "arrangement_id": "two-column",
+          "schema_version": 1,
+          "slots": {
+            "heading": {
+              "kind": "generated",
+              "text": "What we do",
+              "grounded_in": []
+            },
+            "services": {
+              "kind": "fact",
+              "fact_id": "f_services"
+            }
+          },
+          "motion": {
+            "pattern": "none",
+            "tier": "tier_0",
+            "trigger": "load",
+            "density": 0,
+            "budget_ms": 0,
+            "main_thread_ms_est": 0,
+            "reduced_motion_fallback": "poster"
+          },
+          "computed": {
+            "intensity": 0.5,
+            "focal_weight": 1,
+            "density": "medium",
+            "approx_vh": 60,
+            "background_weight": "light",
+            "is_signature": false
+          }
+        },
+        "s_proof": {
+          "family": "proof",
+          "instance_id": "s_proof",
+          "variant_id": "proof/credential_bar",
+          "arrangement_id": "inline-row",
+          "schema_version": 1,
+          "slots": {
+            "heading": {
+              "kind": "generated",
+              "text": "Insured and accredited",
+              "grounded_in": []
+            },
+            "credentials": {
+              "kind": "fact",
+              "fact_id": "f_credentials"
+            }
+          },
+          "motion": {
+            "pattern": "none",
+            "tier": "tier_0",
+            "trigger": "load",
+            "density": 0,
+            "budget_ms": 0,
+            "main_thread_ms_est": 0,
+            "reduced_motion_fallback": "poster"
+          },
+          "computed": {
+            "intensity": 0.7,
+            "focal_weight": 2,
+            "density": "dense",
+            "approx_vh": 45,
+            "background_weight": "dark",
+            "is_signature": false
+          }
+        },
+        "s_faq": {
+          "family": "faq",
+          "instance_id": "s_faq",
+          "variant_id": "faq/native_disclosure",
+          "arrangement_id": "single-column",
+          "schema_version": 1,
+          "slots": {
+            "heading": {
+              "kind": "generated",
+              "text": "Before you ask for a quote",
+              "grounded_in": []
+            },
+            "questions": {
+              "kind": "fact",
+              "fact_id": "f_faq"
+            }
+          },
+          "motion": {
+            "pattern": "none",
+            "tier": "tier_0",
+            "trigger": "load",
+            "density": 0,
+            "budget_ms": 0,
+            "main_thread_ms_est": 0,
+            "reduced_motion_fallback": "poster"
+          },
+          "computed": {
+            "intensity": 0.28,
+            "focal_weight": 1,
+            "density": "sparse",
+            "approx_vh": 52,
+            "background_weight": "light",
+            "is_signature": false
+          }
+        },
+        "s_cta": {
+          "family": "cta",
+          "instance_id": "s_cta",
+          "variant_id": "cta/direct_contact",
+          "arrangement_id": "split-detail",
+          "schema_version": 1,
+          "slots": {
+            "heading": {
+              "kind": "generated",
+              "text": "Ask for an estimate",
+              "grounded_in": []
+            },
+            "promise": {
+              "kind": "fact",
+              "fact_id": "f_response"
+            },
+            "phone": {
+              "kind": "fact",
+              "fact_id": "f_phone"
+            },
+            "email": {
+              "kind": "fact",
+              "fact_id": "f_email"
+            }
+          },
+          "motion": {
+            "pattern": "none",
+            "tier": "tier_0",
+            "trigger": "load",
+            "density": 0,
+            "budget_ms": 0,
+            "main_thread_ms_est": 0,
+            "reduced_motion_fallback": "poster"
+          },
+          "computed": {
+            "intensity": 0.85,
+            "focal_weight": 2,
+            "density": "medium",
+            "approx_vh": 48,
+            "background_weight": "accent",
+            "is_signature": false
+          }
+        }
+      }
+    }
+  },
+  "assets": {
+    "crew_on_ridge": {
+      "asset_id": "crew_on_ridge",
+      "path": "/photos/crew-on-ridge.jpg",
+      "width": 2400,
+      "height": 1600,
+      "aspect": 1.5,
+      "alt": "Two roofers setting slate along a ridge line on a clear morning",
+      "rights": "owned",
+      "subject_consent": true,
+      "ai_generated": false,
+      "tags": [
+        "work"
+      ],
+      "grade_id": "warm_lift"
+    }
+  },
+  "legal": {
+    "entity_jurisdiction": "England and Wales",
+    "privacy_contact": "privacy@ridgelineroofing.example"
+  },
+  "seed": 20260923
+}

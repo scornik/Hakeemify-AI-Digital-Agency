@@ -1,0 +1,73 @@
+{
+  "f_legal_name": {
+    "id": "f_legal_name",
+    "value": "Ridgeline Roofing Ltd",
+    "quotable": true
+  },
+  "f_founded": {
+    "id": "f_founded",
+    "value": 1998,
+    "quotable": true
+  },
+  "f_phone": {
+    "id": "f_phone",
+    "value": "01632 960144",
+    "quotable": true
+  },
+  "f_email": {
+    "id": "f_email",
+    "value": "office@ridgelineroofing.example",
+    "quotable": true
+  },
+  "f_response": {
+    "id": "f_response",
+    "value": "We answer every enquiry within one working day.",
+    "quotable": true
+  },
+  "f_services": {
+    "id": "f_services",
+    "quotable": true,
+    "value": [
+      {
+        "name": "Roof replacement",
+        "summary": "Full tear-off and replacement"
+      },
+      {
+        "name": "Storm damage repair",
+        "summary": "Emergency make-safe and repair"
+      },
+      {
+        "name": "Gutter renewal",
+        "summary": "Seamless gutter and fascia renewal"
+      }
+    ]
+  },
+  "f_credentials": {
+    "id": "f_credentials",
+    "quotable": true,
+    "value": [
+      {
+        "name": "Public liability insurance",
+        "issuer": "Brightwater Underwriting"
+      },
+      {
+        "name": "Competent Roofer scheme member",
+        "issuer": "National Federation of Roofing Contractors"
+      }
+    ]
+  },
+  "f_faq": {
+    "id": "f_faq",
+    "quotable": true,
+    "value": [
+      {
+        "question": "How long does a re-roof take?",
+        "answer": "Most take three to five working days."
+      },
+      {
+        "question": "Do you clear up afterwards?",
+        "answer": "Yes, the site is cleared and swept before we leave."
+      }
+    ]
+  }
+}

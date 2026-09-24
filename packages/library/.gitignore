@@ -1,2 +1,6 @@
 # Compiled tokens.css and other library build products. Generated, never authored.
-build/
+#
+# Anchored to this package root. A bare `build/` matches a directory of that name at ANY depth,
+# which also swallowed packages/library/fixtures/build/ — the renderer's committed input
+# fixtures. They existed locally, so every local run was green and CI could not find them.
+/build/
