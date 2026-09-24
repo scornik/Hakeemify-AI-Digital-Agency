@@ -48,6 +48,8 @@ import {
 import {
   appendEvent,
   newRun,
+  resolveBudgets,
+  type Budgets,
   type ModelCallRecord,
   type PipelineState,
   type Substitution,
@@ -92,7 +94,8 @@ export interface BuildInput {
   readonly legal: Record<string, string>;
   /** Scaffold sections are admitted only when this is a fixture build (ARCHITECTURE §10). */
   readonly allowScaffold?: boolean;
-  readonly budgets?: { max_model_calls: number; max_cost_usd: number };
+  /** Omitted, the ceilings come from `resolveBudgets()`: environment first, then the defaults. */
+  readonly budgets?: Partial<Budgets>;
   /** The last hundred builds, for tier 3. Empty on a first build. */
   readonly recentBuilds?: readonly BuildSample[];
 }
@@ -137,7 +140,9 @@ export function sectionSequenceHash(sections: readonly PlacedSection[]): string 
 }
 
 export async function runBuild(input: BuildInput): Promise<BuildResult> {
-  const budgets = input.budgets ?? { max_model_calls: 24, max_cost_usd: 2 };
+  // One source for the ceilings. The previous literal here was a second copy of DEFAULT_BUDGETS
+  // and would have drifted from it the first time either changed.
+  const budgets = resolveBudgets(process.env, input.budgets ?? {});
   let state = newRun({
     run_id: input.runId,
     site_id: input.siteId,
@@ -154,6 +159,8 @@ export async function runBuild(input: BuildInput): Promise<BuildResult> {
     cost_usd: 0,
     max_calls: budgets.max_model_calls,
     max_cost_usd: budgets.max_cost_usd,
+    started_at_ms: Date.now(),
+    max_wall_clock_ms: budgets.max_wall_clock_ms,
   };
   const memo = new MemoryMemoStore();
   const modelCalls: ModelCallRecord[] = [];

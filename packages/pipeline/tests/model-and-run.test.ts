@@ -16,7 +16,15 @@ import {
   scriptedProvider,
   stubbornProvider,
 } from '../src/model/fake.js';
-import { MemoryCheckpointStore, newRun, setEventClock, type PipelineState } from '../src/state.js';
+import {
+  BudgetConfigError,
+  DEFAULT_BUDGETS,
+  MemoryCheckpointStore,
+  newRun,
+  resolveBudgets,
+  setEventClock,
+  type PipelineState,
+} from '../src/state.js';
 import {
   ResumeError,
   budgetExceeded,
@@ -39,6 +47,9 @@ const ledger = (overrides: Partial<BudgetLedger> = {}): BudgetLedger => ({
   cost_usd: 0,
   max_calls: 8,
   max_cost_usd: 1,
+  started_at_ms: 0,
+  max_wall_clock_ms: 60_000,
+  now: () => 0,
   ...overrides,
 });
 
@@ -465,5 +476,78 @@ describe('interrupt and resume', () => {
     expect(budgetExceeded(state, 'spent').status).toBe('BUDGET_EXCEEDED');
     expect(stuck(state, 'looping').status).toBe('STUCK');
     expect(interrupt(state, 'which positioning?').status).toBe('WAITING_FOR_OWNER');
+  });
+});
+
+describe('budget resolution', () => {
+  it('uses the defaults when nothing is set', () => {
+    expect(resolveBudgets({})).toEqual(DEFAULT_BUDGETS);
+  });
+
+  it('reads a ceiling from the environment, so one run can be raised without an edit', () => {
+    expect(resolveBudgets({ ADA_MAX_COST_USD: '10' })).toMatchObject({ max_cost_usd: 10 });
+    expect(resolveBudgets({ ADA_MAX_MODEL_CALLS: '100' })).toMatchObject({
+      max_model_calls: 100,
+    });
+    expect(resolveBudgets({ ADA_MAX_WALL_CLOCK_MS: '900000' })).toMatchObject({
+      max_wall_clock_ms: 900_000,
+    });
+  });
+
+  it('lets an explicit override win over the environment', () => {
+    expect(resolveBudgets({ ADA_MAX_COST_USD: '10' }, { max_cost_usd: 3 })).toMatchObject({
+      max_cost_usd: 3,
+    });
+  });
+
+  it('throws on a malformed value rather than falling back to the default', () => {
+    // The failure this prevents: an operator sets ADA_MAX_COST_USD=ten, believes the ceiling is
+    // raised, and the run proceeds at a ceiling nobody chose.
+    for (const value of ['ten', '-1', '0', 'NaN', 'Infinity']) {
+      expect(() => resolveBudgets({ ADA_MAX_COST_USD: value }), value).toThrow(BudgetConfigError);
+    }
+  });
+
+  it('ignores an empty variable, which is how a shell spells "unset"', () => {
+    expect(resolveBudgets({ ADA_MAX_COST_USD: '' })).toEqual(DEFAULT_BUDGETS);
+  });
+
+  it('refuses a non-positive explicit override too', () => {
+    expect(() => resolveBudgets({}, { max_model_calls: 0 })).toThrow(BudgetConfigError);
+  });
+
+  it('defaults to a ceiling that makes a runaway cheap', () => {
+    // A default is what runs when nobody thought about it. A fixture build spends ~$0.003.
+    expect(DEFAULT_BUDGETS.max_cost_usd).toBeLessThanOrEqual(1);
+    expect(DEFAULT_BUDGETS.max_wall_clock_ms).toBeGreaterThan(0);
+  });
+});
+
+describe('the wall-clock ceiling', () => {
+  it('stops a run that spends no money and never finishes', async () => {
+    // The local-model case: Ollama costs $0.00 per call, so the dollar ceiling never trips.
+    const outcome = await select(request(), {
+      provider: obedientProvider('ok'),
+      memo: new MemoryMemoStore(),
+      ledger: ledger({
+        max_cost_usd: 1000,
+        max_calls: 1000,
+        started_at_ms: 0,
+        max_wall_clock_ms: 5_000,
+        now: () => 5_001,
+      }),
+    });
+    expect(outcome.kind).toBe('budget_exceeded');
+    if (outcome.kind !== 'budget_exceeded') throw new Error('expected budget_exceeded');
+    expect(outcome.reason).toMatch(/5000 ms/);
+  });
+
+  it('does not trip inside the ceiling', async () => {
+    const outcome = await select(request(), {
+      provider: obedientProvider('ok'),
+      memo: new MemoryMemoStore(),
+      ledger: ledger({ started_at_ms: 0, max_wall_clock_ms: 5_000, now: () => 4_999 }),
+    });
+    expect(outcome.kind).toBe('selected');
   });
 });

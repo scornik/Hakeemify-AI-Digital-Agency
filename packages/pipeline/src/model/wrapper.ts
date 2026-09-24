@@ -94,6 +94,11 @@ export interface BudgetLedger {
   cost_usd: number;
   readonly max_calls: number;
   readonly max_cost_usd: number;
+  /** `Date.now()` when the run started; the wall-clock ceiling is measured from it. */
+  readonly started_at_ms: number;
+  readonly max_wall_clock_ms: number;
+  /** Injected so a test can exhaust a time budget without waiting for it. */
+  readonly now?: () => number;
 }
 
 export interface SelectionRequest {
@@ -306,6 +311,18 @@ export async function select(
       return {
         kind: 'budget_exceeded',
         reason: `run reached its ceiling of $${options.ledger.max_cost_usd}`,
+        cost_usd: spent,
+      };
+    }
+    // Checked alongside cost rather than instead of it: a run against a local model spends
+    // nothing and can still never finish.
+    const elapsed = (options.ledger.now ?? Date.now)() - options.ledger.started_at_ms;
+    if (elapsed >= options.ledger.max_wall_clock_ms) {
+      return {
+        kind: 'budget_exceeded',
+        reason:
+          `run reached its ceiling of ${options.ledger.max_wall_clock_ms} ms ` +
+          `(${elapsed} ms elapsed)`,
         cost_usd: spent,
       };
     }
