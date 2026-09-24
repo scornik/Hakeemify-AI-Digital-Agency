@@ -41,6 +41,22 @@ the playbook lives in `packages/pipeline/src/e2e/fixture-assets.ts`, outside the
 
 ## [P4] Model provider, routing per call type, and the per-run USD ceiling — 2026-09-23
 
+> **Partly decided by the owner, 2026-09-24.** Not one provider: a router over several —
+> OpenRouter as an aggregator, plus Anthropic, OpenAI and other hosted providers directly, plus
+> local models (Ollama and similar). The `ModelProvider` interface already permits this
+> unchanged; what it adds is a **routing table keyed by call type** and a **fallback order**,
+> which is now the design work rather than a procurement question.
+>
+> Still open, and still owner-only: (a) which model answers each of the four call types — the
+> three enum selections are cheap and structured, copy is the only one where quality shows;
+> (b) the per-run ceiling. A ceiling in dollars alone stops meaning anything once a local model
+> can answer a call for $0.00 but take ninety seconds, so this likely becomes a
+> `{ max_model_calls, max_cost_usd, max_wall_clock_ms }` triple.
+>
+> One name from the owner's list I could not map to a provider with confidence, so I have not
+> guessed at it: "Xkiro", "jev" and "lay ai" need to be spelled out before they go in a routing
+> table.
+
 **What I was doing:** implementing the model-call wrapper and its dual budget guard.
 
 **What I need decided:** which provider and model answers each of the four constrained calls, and
@@ -65,6 +81,17 @@ ever been called by this code.
 ---
 
 ## [P5] Hosting target for generated sites — 2026-09-23
+
+> **Decided by the owner, 2026-09-24.** Vercel and comparable free static hosts as the primary
+> target, plus Hostinger, including a Node application where a host needs one. That is more than
+> one target, so the answer is a **deploy adapter per target** rather than a single assumption:
+> each one owns its redirect and 404 mechanism, its header policy, and whether assets are served
+> from the same origin.
+>
+> Still open, and it is a real decision rather than a detail: the gate's transport rows
+> (`is-on-https`, `has-hsts`, `csp-xss`, checklist 79–80) assert headers, and headers are set
+> differently on each host — `vercel.json`, an `.htaccess`, or Express middleware. Those checks
+> stay `notApplicable` until at least one adapter exists to assert against.
 
 **What I was doing:** the Astro renderer and its build output.
 
