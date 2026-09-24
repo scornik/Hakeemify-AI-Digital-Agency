@@ -64,7 +64,9 @@ jobs:
           key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        # Filtered: @playwright/test is a devDependency of @ada/gate, not of the workspace root,
+        # so its bin is not on the root's path.
+        run: pnpm --filter @ada/gate exec playwright install --with-deps chromium
 
       - name: Verify
         run: pnpm run verify
