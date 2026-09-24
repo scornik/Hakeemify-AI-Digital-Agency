@@ -80,14 +80,34 @@ OpenRouter as an aggregator, hosted providers directly (Anthropic, OpenAI), and 
 (Ollama and similar). `ModelProvider` is a one-method interface and needs no change; what this
 adds is a **routing table keyed by call type** and a **fallback order**.
 
-**Still open, and still owner-only:**
+**Built, 2026-09-24.** Six providers in `packages/pipeline/src/model/providers.ts` — OpenRouter,
+Omniroute, Anthropic, OpenAI, Gemini, Ollama — behind the router in `router.ts`, which routes by
+call type with a fallback chain. No credential is in this repository and no endpoint has ever
+been called by it; the tests inject a fake `fetch`.
 
-- **Which model answers each of the four call types.** The three enum selections are cheap and
-  structured — a small local model may be enough, and every one of them is memoised. Copy is the
-  only call where quality is visible to a client. Routing them all to the same model wastes money
-  on the selections or quality on the copy.
-- **Three names from the owner's list I could not map to a provider, and did not guess at:**
-  "Xkiro", "jev", "lay ai". Spell these out before they go in a routing table.
+Two rules inside it worth contesting if you disagree:
+
+- **A fallback is only taken when a provider could not answer at all** — network error, 5xx,
+  missing key. Never because the model gave a bad answer. Re-asking is the wrapper's job, it
+  counts against the call budget, and it stops after `maxReasks`. A router that also retried bad
+  answers would multiply attempts by the chain length behind the ledger's back and both ceilings
+  would stop meaning anything.
+- **A model with no recorded price is an error, not a zero.** Prices change without notice, so
+  none is baked in: the book comes from `ADA_PRICE_BOOK`. A stale or missing price does not fail
+  loudly, it under-reports, and a run sails past a ceiling the operator believes is holding.
+
+**Still open, and still owner-only:** which model answers each call type. The six selection
+stages are cheap, structured and memoised — a small local model may be enough. Copy is the only
+call where quality is visible to a client. `selectionAndCopyRoutes()` encodes that split; the
+model names are yours to choose.
+
+**Omniroute is an assumption, not knowledge.** I do not know its API. It is registered as an
+OpenAI-protocol endpoint because that is what aggregators overwhelmingly expose, and it has **no
+default hostname** — `ADA_OMNIROUTE_BASE_URL` must supply one. A guessed endpoint that 404s looks
+like an outage. If it speaks a different protocol it needs its own adapter, and the error says
+so.
+
+**Dropped at the owner's request, 2026-09-24:** "Xkiro", "jev", "lay ai".
 
 **Note on the memo key:** it deliberately excludes the model id, so changing which model answers
 a call does not silently re-decide anything already decided. That property is load-bearing under
