@@ -20,6 +20,16 @@
       :root {
         --ds-bg-base: #fbfaf7;
       }
+      img {
+        max-width: 100%;
+        height: auto;
+      }
+      /* WCAG 2.2 AA 2.5.8: a bare inline link is 17px tall, under the 24×24 floor. */
+      a {
+        display: inline-block;
+        padding: 8px 12px;
+        margin: 2px;
+      }
       @media (prefers-reduced-motion: reduce) {
         *,
         *::before,

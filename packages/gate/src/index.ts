@@ -13,3 +13,4 @@ export * from './artifacts/fixture-site.js';
 export * from './artifacts/browser-gatherer.js';
 export * from './artifacts/serve.js';
 export * from './browser-pass.js';
+export * from './lighthouse-pass.js';

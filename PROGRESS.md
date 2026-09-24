@@ -633,3 +633,84 @@ will eventually be pointed at one.
 
 **Measurements are taken after `document.fonts.ready`.** Fonts change layout, and layout changes
 contrast, target size and overflow.
+
+---
+
+## P6c — the resource budgets, executed
+
+**DoD:** `pnpm e2e:fixture` exits 0 with **three** passes green — static, browser, and the
+Lighthouse budgets on the median of three runs.
+
+`policy.ts` has held `LHCI_ASSERTIONS` since P2: fourteen rows, eleven of them `error`. Nothing
+ever ran them. A budget that is configured and not executed is not a budget, and this one was
+guarding the number the whole architecture is built around — 180 kB of JavaScript per page.
+
+### What running it caught
+
+**The "clean" gate fixture was not clean.** `fixtures/site-clean/index.html` requested
+`/assets/photos/crew-on-ridge.jpg`, `/assets/og/home.png` and `/favicon.svg`; none of the three
+existed. The first Lighthouse run reported CLS `0.49` against a budget of `0.1` — a fifth of the
+viewport moving on a five-section static page, because a 2400×1600 image that 404s collapses to
+its alt text after layout.
+
+The deeper finding is why nobody knew. `bp.no-failed-requests` had been deciding against this
+fixture for a milestone. The browser-pass test asserted only that the check was *decided* —
+`not.toBe('notApplicable')` — which it was, correctly, as a failure nobody read. "Clean" has to
+mean green or the fixture stops being a baseline, so that test now asserts `result.fatal` is
+empty, and the fixture ships the three files it asks for plus the `img { max-width: 100%;
+height: auto }` pair that turns a declared width and height into a reserved box.
+
+**Tightening that assertion then found a second thing.** With `result.fatal` actually asserted,
+the fixture failed WCAG 2.2 AA 2.5.8: every link in it was a bare 17px-tall inline element,
+under the 24×24 target-size floor. `wcag22aa` has been in `AXE_TAGS` since P2 and axe had been
+reporting it correctly the whole time. Both fixture pages now carry the padding a real page has.
+
+The `/privacy` fixture was also requesting an `og:image` that did not exist, and two of the three
+rows in the first red run were the *test's* fault rather than the fixture's: it gathered only
+`/`, and `build.routes` is derived from the route list, so the footer's own link to `/privacy`
+read as a broken link. The test now gathers both routes, which is what the fixture is.
+
+### Decisions
+
+**Collection is programmatic; evaluation reads `policy.ts`.** `@lhci/cli` evaluates assertions
+from its own config file, which would make a second copy of the gate policy — and two copies of a
+policy is how the two drift. So `runLighthousePass` drives Lighthouse's Node API against a
+Playwright chromium launched with `--remote-debugging-port`, and asserts against the same
+`LHCI_ASSERTIONS` object the rest of the gate imports. `buildLhciConfig()` stays, generated from
+that one source, for anyone running the CLI directly.
+
+**An unevaluated `error` budget is a failure, not a pass.** `unevaluatedErrors()` exists because
+of a specific near-miss: `resource-summary` is one audit holding a table, and the size budgets
+address rows inside it. If the audit is dropped — renamed upstream, filtered out by
+`onlyCategories`, errored during collection — then reading a missing row as "zero bytes" passes
+every size budget silently. The pass now reports any error-level assertion that produced no value
+as fatal, with the reason `the budget was not enforced`. This is the same shape as the
+`WEIGHT_BEARING_MODES` fix in `report.ts`: the bug class is a gate that stops gating while the
+report stays green.
+
+A resource *type* with no requests is different, and is genuinely zero — a page that makes no
+third-party requests passes a third-party budget.
+
+**Timing rows warn; deterministic rows fail.** Unchanged from the policy written in P2, now
+actually enforced. Sizes, counts, unsized images, render-blocking resources, font-display, LCP
+discoverability and non-composited animations are exact on a static build and are `error`. LCP,
+TBT and FCP move between runs on the same machine and are `warn` on the median of three.
+`categories:performance` is still absent, and `report-and-repair.test.ts` still asserts no
+`categories:*` row can appear.
+
+**The median run, not the mean.** `computeMedianRun` from Lighthouse's own library picks the run
+closest to the median across several metrics at once. A mean over a bimodal distribution
+describes a page that never loaded that way.
+
+**One representative page per (archetype × arrangement signature).** `representativeRoutes()`
+existed from P2 and is now wired: two pages built from the same sections cannot disagree about
+their script budget, so the expensive pass runs once per group, on the first route in sorted
+order.
+
+### What it reports on the fixture
+
+`pnpm e2e:fixture` ends with `budgets green — 14 assertion(s), 1 warning(s)`. The warning is
+`total-blocking-time` at 304 ms against 200 ms, on a page that ships zero bytes of JavaScript —
+Lighthouse's simulated CPU throttling on a loaded development machine, which is precisely the
+reason timing rows warn instead of failing. If that row were an `error`, the gate would be
+red on a page with nothing to block on.

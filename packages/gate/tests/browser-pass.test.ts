@@ -32,11 +32,13 @@ describe('the browser pass', () => {
       origin: 'https://ridgelineroofing.example',
       context: cleanContext,
       build,
-      routes: ['/'],
+      // Both routes, because `build.routes` is derived from this list: gathering only `/` would
+      // make the fixture's own footer link to `/privacy` look like a broken link.
+      routes: ['/', '/privacy'],
       projects: [desktop],
     });
 
-    expect(result.reports).toHaveLength(1);
+    expect(result.reports).toHaveLength(2);
     const report = result.reports[0];
     if (!report) throw new Error('no report');
 
@@ -56,6 +58,14 @@ describe('the browser pass', () => {
     ]) {
       expect(byId.get(id)?.mode, `${id} was not decided`).not.toBe('notApplicable');
     }
+
+    // "Clean" has to mean green, or the fixture stops being a baseline. Asserting only that the
+    // checks were *decided* is how this fixture spent a milestone requesting an image that did
+    // not exist: `bp.no-failed-requests` was decided, and decided against it, and nobody read it.
+    const failing = result.reports.flatMap((row) =>
+      row.checks.filter((check) => check.mode !== 'notApplicable' && !check.passed),
+    );
+    expect(result.fatal, JSON.stringify(failing, null, 2)).toEqual([]);
   }, 120_000);
 
   it('runs axe with the full tag set, not Lighthouse’s subset', async () => {

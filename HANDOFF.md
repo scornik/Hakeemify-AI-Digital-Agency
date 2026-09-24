@@ -1,9 +1,9 @@
 # Handoff — P7, the section library
 
-P0 through P6 are complete. `pnpm verify` is green (505 tests, 26 files) and `pnpm e2e:fixture`
-builds one business from its fact registry through all sixteen stages to a green gate — both the
-static pass and the browser pass across the five-project matrix — emitting `build-rationale.json`
-and `gap-report.json`.
+P0 through P6 are complete. `pnpm verify` is green and `pnpm e2e:fixture` builds one business
+from its fact registry through all sixteen stages to a green gate — the static pass on every
+page, the browser pass across the five-project matrix, and the resource budgets on the median of
+three Lighthouse runs — emitting `build-rationale.json` and `gap-report.json`.
 
 What is not done is the part that cannot be automated, and this document is about that.
 
@@ -86,9 +86,9 @@ three things you are adding.
 
 ```bash
 pnpm install
-pnpm verify                 # licences, format, lint, typecheck, 505 tests
+pnpm verify                 # licences, format, lint, typecheck, 519 tests
 pnpm build:fixture          # compile tokens, render the fixture site, emit the build manifest
-pnpm e2e:fixture            # the whole pipeline, end to end, both gate passes
+pnpm e2e:fixture            # the whole pipeline, end to end, all three gate passes
 pnpm library:grade          # record a human grade — refuses to run without a TTY
 pnpm --filter @ada/library test
 ```
@@ -139,7 +139,8 @@ Nothing below is hidden in the code; each has a comment at the site and an entry
 | **Model provider** | `packages/pipeline/src/model/fake.ts` | Every test and the e2e use a deterministic fake. **No real provider has ever been called by this code.** |
 | **Copy generation** | `packages/pipeline/src/build.ts` (`SlotPlanner`) | Stage 10 takes copy from a planner the caller supplies. The fixture writes its own strings, held to the same `grounded_in` leash. The model call is not wired. |
 | **Anti-slop tier 2** | — | **Not implemented.** The warning-only cliché judge that grows the tier-1 list from real output. Tiers 1 and 3 are complete. |
-| **Browser half of the gate** | `packages/gate/src/browser-pass.ts` | **Wired in and green** across the five-project matrix. `pnpm e2e:fixture` runs both passes and fails on either. Lighthouse/LHCI is configured in `policy.ts` but not executed. |
+| **Browser half of the gate** | `packages/gate/src/browser-pass.ts` | **Wired in and green** across the five-project matrix. |
+| **Resource budgets** | `packages/gate/src/lighthouse-pass.ts` | **Wired in and green.** Lighthouse's Node API, three runs, the median asserted against the same `LHCI_ASSERTIONS` in `policy.ts`. An error-level budget that produced no value is fatal, not a pass. |
 | **Reduced-motion assertion** | `packages/gate/src/browser-pass.ts` | **Done.** The `reduced-motion` project counts running animations in a real browser and asserts zero. |
 | **Reference renders** | `packages/library/src/references/` | Addressing, storage contract and resolver are done. No render has been produced — that needs authored arrangements. |
 | **Telemetry, priors, diversity ledger** | — | Event contract designed in v4 §10/§18; not implemented. Nothing depends on them yet. |

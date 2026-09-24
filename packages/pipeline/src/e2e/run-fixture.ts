@@ -15,11 +15,15 @@ import { loadManifests, LIBRARY_ROOT } from '@ada/library';
 import {
   GATE_POLICY_VERSION,
   JS_BUDGET_BYTES,
+  representativeRoutes,
   runBrowserPass,
+  runLighthousePass,
   runStaticGate,
+  summariseLighthouse,
   summariseResult,
   type ExpectedPage,
   type GateContext,
+  type LighthousePassResult,
   type SiteGateResult,
 } from '@ada/gate';
 
@@ -138,6 +142,8 @@ export interface FixtureArtifacts {
   readonly gate: SiteGateResult;
   /** Pass 2: the project matrix in a real browser. Absent only when explicitly skipped. */
   readonly browserGate?: SiteGateResult;
+  /** Pass 3: the resource budgets, on the median of three Lighthouse runs. */
+  readonly lighthouse?: LighthousePassResult;
   readonly outDir: string;
   readonly artifactsDir: string;
 }
@@ -217,7 +223,7 @@ function renderFactText(value: unknown, depth = 0): string {
  * CLI can both assert on the same result.
  */
 export async function runFixtureEndToEnd(
-  options: { runId?: string; browser?: boolean } = {},
+  options: { runId?: string; browser?: boolean; lighthouse?: boolean } = {},
 ): Promise<FixtureArtifacts> {
   const result = await buildFixtureSite(options.runId ?? 'b_fixture');
 
@@ -291,6 +297,27 @@ export async function runFixtureEndToEnd(
           policyVersion: GATE_POLICY_VERSION,
         });
 
+  // ---- 13c. the resource budgets -----------------------------------------------------------
+  // Only one page per (archetype × arrangement signature) gets the expensive pass: two pages
+  // built from the same sections cannot disagree about their script budget. What is asserted is
+  // the deterministic half of the policy — sizes, counts, unsized images, render-blocking
+  // resources — on the median of three runs. Timing rows warn and never fail a build alone.
+  const lighthouse =
+    options.lighthouse === false
+      ? undefined
+      : await runLighthousePass({
+          root: outDir,
+          routes: representativeRoutes(
+            gateContextFor(result).pages.map((page) => ({
+              route: page.route,
+              archetype: page.archetype,
+              arrangementSignature: page.sections
+                .map((section) => `${section.variantId}@${section.arrangementId}`)
+                .join('+'),
+            })),
+          ),
+        });
+
   // ---- 14-15. the two client-facing documents ----------------------------------------------
   writeFileSync(
     join(artifactsDir, 'build-rationale.json'),
@@ -320,6 +347,14 @@ export async function runFixtureEndToEnd(
               reports: browserGate.reports,
             }
           : null,
+        lighthouse: lighthouse
+          ? {
+              canShip: lighthouse.canShip,
+              // The median LHRs are deliberately not written here: they are ~2 MB each and the
+              // budget rows say everything a reader needs. Re-run the pass to see them.
+              assertions: lighthouse.assertions,
+            }
+          : null,
       },
       null,
       2,
@@ -331,13 +366,26 @@ export async function runFixtureEndToEnd(
     result,
     gate,
     ...(browserGate === undefined ? {} : { browserGate }),
+    ...(lighthouse === undefined ? {} : { lighthouse }),
     outDir,
     artifactsDir,
   };
 }
 
+/**
+ * The build ships only if every pass is green. Kept here rather than in the CLI so the test and
+ * `pnpm e2e:fixture` cannot disagree about what "green" means.
+ */
+export function canShip(artifacts: FixtureArtifacts): boolean {
+  return (
+    artifacts.gate.canShip &&
+    (artifacts.browserGate?.canShip ?? true) &&
+    (artifacts.lighthouse?.canShip ?? true)
+  );
+}
+
 export function reportLines(artifacts: FixtureArtifacts): string[] {
-  const { result, gate, browserGate } = artifacts;
+  const { result, gate, browserGate, lighthouse } = artifacts;
   return [
     `site definition hash  ${result.siteDefinitionHash.slice(0, 16)}`,
     `sections              ${result.sections.map((s) => s.variant.id).join(', ')}`,
@@ -348,6 +396,9 @@ export function reportLines(artifacts: FixtureArtifacts): string[] {
     browserGate
       ? `browser pass          ${summariseResult(browserGate)}`
       : 'browser pass          skipped',
+    lighthouse
+      ? `budget pass           ${summariseLighthouse(lighthouse)}`
+      : 'budget pass           skipped',
   ];
 }
 
