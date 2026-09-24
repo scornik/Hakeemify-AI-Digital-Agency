@@ -53,6 +53,8 @@ function artifactPresent(bundle: ArtifactBundle, name: ArtifactName): boolean {
       return bundle.lighthouse !== undefined;
     case 'screenshots':
       return bundle.screenshots !== undefined;
+    case 'deploy':
+      return bundle.deploy !== undefined;
   }
 }
 

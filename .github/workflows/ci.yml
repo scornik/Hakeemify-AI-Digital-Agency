@@ -15,6 +15,9 @@ jobs:
     timeout-minutes: 30
 
     services:
+      # Nothing reads DATABASE_URL yet — persistence is MemoryCheckpointStore and the Drizzle
+      # schema (ARCHITECTURE §4) is unwritten. Kept so the first migration has somewhere to run,
+      # not because anything here is covered by it.
       postgres:
         image: postgres:17-alpine
         env:
@@ -31,6 +34,11 @@ jobs:
 
     env:
       DATABASE_URL: postgres://ada:ada@localhost:55432/ada
+      # The ceilings are resolved per run (packages/pipeline/src/state.ts). CI uses the
+      # deterministic fake provider and spends nothing, so this is a tripwire rather than a
+      # budget: if a real provider is ever wired in by accident, the run stops instead of
+      # billing somebody.
+      ADA_MAX_COST_USD: '0.01'
 
     steps:
       - uses: actions/checkout@v5
@@ -45,5 +53,32 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # `pnpm verify` includes the browser pass and the Lighthouse pass, and both fail closed
+      # when no browser is present — deliberately, because falling back to the static subset
+      # would report green on a gate that stopped gating. So CI needs the binary.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
       - name: Verify
         run: pnpm run verify
+
+      # The acceptance test, not a report: one business through all sixteen stages to a green
+      # gate across all three passes. It exits non-zero when any pass is red.
+      - name: End to end
+        run: pnpm run e2e:fixture
+
+      - name: Upload gate artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-artifacts
+          path: artifacts/
+          if-no-files-found: ignore
+          retention-days: 14

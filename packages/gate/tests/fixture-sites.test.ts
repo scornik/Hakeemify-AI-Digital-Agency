@@ -8,6 +8,7 @@ import { GATE_POLICY_VERSION, JS_BUDGET_BYTES } from '../src/policy.js';
 import { runBrowserGate, runStaticGate, summariseResult } from '../src/runner.js';
 import type { CheckResult } from '../src/types.js';
 import { brokenContext, cleanContext } from './fixtures/context.js';
+import { parseDeployConfig } from '../src/deploy.js';
 
 const fixture = (name: string): string =>
   fileURLToPath(new URL(`../fixtures/${name}`, import.meta.url));
@@ -32,6 +33,36 @@ const brokenBundles = loadSite({
   allowedHosts: ['fonts.googleapis.com', 'fonts.gstatic.com'],
   buildYear: 2026,
 });
+
+/**
+ * The broken site also ships a broken deploy config: HSTS dropped, a CSP that still allows
+ * scripts on a build whose home page ships none of its own, and a catch-all rewrite that turns
+ * every unknown path into a 200. One artifact, all three deploy rows.
+ */
+const brokenDeploy = parseDeployConfig('vercel', {
+  'vercel.json': JSON.stringify({
+    headers: [
+      {
+        source: '/(.*)',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          // Declared, but weaker than the policy: 'unsafe-inline' on script-src is the single
+          // most common way a CSP is made decorative.
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline'",
+          },
+        ],
+      },
+    ],
+    rewrites: [{ source: '/(.*)', destination: '/index.html' }],
+  }),
+});
+
+const brokenBundlesWithDeploy = brokenBundles.map((bundle) => ({
+  ...bundle,
+  deploy: brokenDeploy,
+}));
 
 /**
  * A check counts as failing when the machine decided it failed, or could not decide and needs a
@@ -61,7 +92,13 @@ describe('the check registry', () => {
     expect(STATIC_CHECKS.length).toBeGreaterThan(25);
     expect(STATIC_CHECKS.length).toBeLessThan(ALL_CHECKS.length);
     for (const check of STATIC_CHECKS) {
-      expect(check.requiredArtifacts.every((a) => a === 'dom' || a === 'build')).toBe(true);
+      // `deploy` sits with `dom` and `build`: all three are emitted by the build, so a check
+      // reading any of them needs no browser. The property being asserted is "decidable without
+      // launching anything", not the specific artifact names.
+      expect(
+        check.requiredArtifacts.every((a) => a === 'dom' || a === 'build' || a === 'deploy'),
+        check.id,
+      ).toBe(true);
     }
   });
 });
@@ -169,11 +206,14 @@ describe('site-broken', () => {
     'structure.section-count',
     'trust.contact-parity',
     'trust.favicon-manifest',
+    'deploy.security-headers-declared',
+    'deploy.csp-matches-build',
+    'deploy.no-spa-fallback',
   ].sort();
 
   it('fails exactly the expected set of checks across its pages', () => {
     const union = new Set<string>();
-    for (const bundle of brokenBundles) {
+    for (const bundle of brokenBundlesWithDeploy) {
       for (const id of failingIds(
         runChecks(STATIC_CHECKS, bundle, {
           context: brokenContext,

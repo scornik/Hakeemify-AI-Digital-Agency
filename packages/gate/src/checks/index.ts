@@ -4,12 +4,14 @@ import { STRUCTURE_CHECKS } from './structure.js';
 import { CONTENT_CHECKS } from './content.js';
 import { A11Y_CHECKS } from './a11y.js';
 import { TRUST_CHECKS } from './trust.js';
+import { DEPLOY_CHECKS } from './deploy.js';
 
 export * from './seo.js';
 export * from './structure.js';
 export * from './content.js';
 export * from './a11y.js';
 export * from './trust.js';
+export * from './deploy.js';
 
 /** Every check the gate knows about. */
 export const ALL_CHECKS: readonly Check[] = [
@@ -18,6 +20,7 @@ export const ALL_CHECKS: readonly Check[] = [
   ...CONTENT_CHECKS,
   ...A11Y_CHECKS,
   ...TRUST_CHECKS,
+  ...DEPLOY_CHECKS,
 ];
 
 /**
@@ -25,7 +28,12 @@ export const ALL_CHECKS: readonly Check[] = [
  * of every build with no browser, which is what makes a 40-check pass cost seconds.
  */
 export const STATIC_CHECKS: readonly Check[] = ALL_CHECKS.filter((check) =>
-  check.requiredArtifacts.every((artifact) => artifact === 'dom' || artifact === 'build'),
+  // `deploy` belongs here with `dom` and `build`: it is emitted by the build, so a check that
+  // reads it needs no browser. Leaving it out would file the deploy rows under RUNTIME_CHECKS
+  // and they would never run in the pass that can actually decide them.
+  check.requiredArtifacts.every(
+    (artifact) => artifact === 'dom' || artifact === 'build' || artifact === 'deploy',
+  ),
 );
 
 /** The checks that need a real browser. */

@@ -10,6 +10,9 @@
  * a result a machine genuinely cannot decide, which must reach a human rather than being
  * rounded to a pass.
  */
+import type { DeployArtifact } from './deploy.js';
+
+export type { DeployArtifact };
 
 export const SCORE_DISPLAY_MODES = [
   /** Pass or fail. Most of our checks. */
@@ -74,6 +77,7 @@ export const ARTIFACT_NAMES = [
   'screenshots',
   'runtime',
   'lighthouse',
+  'deploy',
 ] as const;
 export type ArtifactName = (typeof ARTIFACT_NAMES)[number];
 
@@ -273,4 +277,10 @@ export interface ArtifactBundle {
   readonly runtime?: RuntimeArtifact;
   readonly lighthouse?: LighthouseArtifact;
   readonly screenshots?: Readonly<Record<string, string>>;
+  /**
+   * The host config the build emitted. Present only when a deploy target was chosen — a build
+   * with no target declares no headers, and the `deploy.*` rows are `notApplicable` rather than
+   * failing, because "no target yet" is not "insecure".
+   */
+  readonly deploy?: DeployArtifact;
 }

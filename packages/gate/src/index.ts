@@ -5,6 +5,7 @@ export * from './context.js';
 export * from './report.js';
 export * from './registry.js';
 export * from './policy.js';
+export * from './deploy.js';
 export * from './repair.js';
 export * from './runner.js';
 export * from './checks/index.js';
