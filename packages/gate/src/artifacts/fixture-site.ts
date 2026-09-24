@@ -10,6 +10,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import type { ArtifactBundle, BuildArtifact } from '../types.js';
 import { gatherStatic } from './static-gatherer.js';
+import { readDeployConfig, type DeployTarget } from '../deploy.js';
 
 export interface SiteLoadOptions {
   readonly root: string;
@@ -19,6 +20,12 @@ export interface SiteLoadOptions {
   readonly allowedHosts?: readonly string[];
   readonly buildYear?: number;
   readonly project?: string;
+  /**
+   * When set, the target's config is read out of `root` and attached to every bundle. Absent,
+   * the `deploy.*` checks are `notApplicable` — a build with no host chosen has not failed to
+   * declare headers, there is simply nowhere to declare them yet.
+   */
+  readonly deployTarget?: DeployTarget;
 }
 
 function walkHtml(root: string): string[] {
@@ -80,6 +87,12 @@ export function loadSite(options: SiteLoadOptions): ArtifactBundle[] {
     buildYear: options.buildYear ?? new Date().getFullYear(),
   };
 
+  // Read once for the whole site: a deploy config is site-wide, not per page.
+  const deploy =
+    options.deployTarget === undefined
+      ? null
+      : readDeployConfig(options.root, options.deployTarget);
+
   return files.map((file, index) => ({
     project: options.project ?? 'static',
     build,
@@ -88,5 +101,6 @@ export function loadSite(options: SiteLoadOptions): ArtifactBundle[] {
       html: readFileSync(file, 'utf8'),
       origin: options.origin,
     }),
+    ...(deploy === null ? {} : { deploy }),
   }));
 }

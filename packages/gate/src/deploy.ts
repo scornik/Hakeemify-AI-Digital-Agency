@@ -15,6 +15,8 @@
  * No TOML or YAML parser is used anywhere here: every format emitted is either JSON or a
  * line-oriented text file, so the dependency closure shipped to a client stays where it is.
  */
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 export const DEPLOY_TARGETS = ['vercel', 'netlify', 'northflank'] as const;
 export type DeployTarget = (typeof DEPLOY_TARGETS)[number];
@@ -291,4 +293,41 @@ export function parseDeployConfig(
 
 function isCatchAll(source: string): boolean {
   return ['/*', '/(.*)', '/**'].includes(source.trim());
+}
+
+// ---------------------------------------------------------------------------------------------
+// Writing and reading a config on disk
+// ---------------------------------------------------------------------------------------------
+
+/** The files each target owns. Used to read a config back without guessing at filenames. */
+export const DEPLOY_CONFIG_FILES: Readonly<Record<DeployTarget, readonly string[]>> = {
+  vercel: ['vercel.json'],
+  netlify: ['_headers', '_redirects'],
+  northflank: ['nginx.conf', 'Dockerfile'],
+};
+
+/** Write the target's config into a build output directory. Returns the paths written. */
+export function writeDeployConfig(root: string, input: DeployConfigInput): string[] {
+  const files = renderDeployConfig(input);
+  for (const file of files) {
+    const full = join(root, file.path);
+    mkdirSync(dirname(full), { recursive: true });
+    writeFileSync(full, file.contents, 'utf8');
+  }
+  return files.map((file) => file.path);
+}
+
+/**
+ * Read a target's config back out of a build output directory. Returns `null` when none of the
+ * target's files are present, which is how "no deploy target chosen" reaches the checks as
+ * `notApplicable` rather than as a failure.
+ */
+export function readDeployConfig(root: string, target: DeployTarget): DeployArtifact | null {
+  const files: Record<string, string> = {};
+  for (const name of DEPLOY_CONFIG_FILES[target]) {
+    const full = join(root, name);
+    if (existsSync(full)) files[name] = readFileSync(full, 'utf8');
+  }
+  if (Object.keys(files).length === 0) return null;
+  return parseDeployConfig(target, files);
 }

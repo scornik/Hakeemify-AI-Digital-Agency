@@ -17,12 +17,14 @@ import {
   JS_BUDGET_BYTES,
   representativeRoutes,
   runBrowserPass,
+  writeDeployConfig,
   runLighthousePass,
   runStaticGate,
   summariseLighthouse,
   summariseResult,
   type ExpectedPage,
   type GateContext,
+  type DeployTarget,
   type LighthousePassResult,
   type SiteGateResult,
 } from '@ada/gate';
@@ -223,7 +225,12 @@ function renderFactText(value: unknown, depth = 0): string {
  * CLI can both assert on the same result.
  */
 export async function runFixtureEndToEnd(
-  options: { runId?: string; browser?: boolean; lighthouse?: boolean } = {},
+  options: {
+    runId?: string;
+    browser?: boolean;
+    lighthouse?: boolean;
+    deployTarget?: DeployTarget;
+  } = {},
 ): Promise<FixtureArtifacts> {
   const result = await buildFixtureSite(options.runId ?? 'b_fixture');
 
@@ -253,6 +260,21 @@ export async function runFixtureEndToEnd(
     readFileSync(join(outDir, '_ada', 'build-manifest.json'), 'utf8'),
   ) as { js_bytes_by_route: Record<string, number>; routes: string[] };
 
+  // ---- 12b. the deploy config ----------------------------------------------------------------
+  // Emitted here rather than in the renderer: the renderer produces a host-agnostic static
+  // directory, and which host it lands on is a build decision, not a rendering one. Making
+  // @ada/library depend on @ada/gate to write a header file would also drag the gate's
+  // dependencies into the closure shipped to a client.
+  //
+  // Vercel for the fixture. Like the roofing niche, that is fixture data and not a product
+  // choice — all three adapters are covered by @ada/gate's unit tests.
+  const deployTarget: DeployTarget = options.deployTarget ?? 'vercel';
+  writeDeployConfig(outDir, {
+    target: deployTarget,
+    allowedHosts: [],
+    shipsJavaScript: Object.values(buildManifest.js_bytes_by_route).some((bytes) => bytes > 0),
+  });
+
   const gate = runStaticGate({
     site: {
       root: outDir,
@@ -261,6 +283,7 @@ export async function runFixtureEndToEnd(
       jsBytesByRoute: buildManifest.js_bytes_by_route,
       allowedHosts: [],
       buildYear: new Date().getFullYear(),
+      deployTarget,
     },
     context: gateContextFor(result),
     policyVersion: GATE_POLICY_VERSION,

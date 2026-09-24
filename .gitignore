@@ -13,5 +13,9 @@ blob-report/
 fixtures/**/dist/
 dist-site/
 build/
-artifacts/
+# Anchored to the repository root on purpose. A bare `artifacts/` matches a directory of that
+# name at ANY depth, which silently excluded packages/gate/src/artifacts/serve.ts from every
+# commit — the file existed locally, `git add -A` skipped it without a word, and CI could not
+# compile the package.
+/artifacts/
 dist-e2e/
