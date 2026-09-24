@@ -15,6 +15,7 @@ import { loadManifests, LIBRARY_ROOT } from '@ada/library';
 import {
   GATE_POLICY_VERSION,
   JS_BUDGET_BYTES,
+  runBrowserPass,
   runStaticGate,
   summariseResult,
   type ExpectedPage,
@@ -133,7 +134,10 @@ export async function buildFixtureSite(runId = 'b_fixture'): Promise<BuildResult
 
 export interface FixtureArtifacts {
   readonly result: BuildResult;
+  /** Pass 1: every page, no browser. */
   readonly gate: SiteGateResult;
+  /** Pass 2: the project matrix in a real browser. Absent only when explicitly skipped. */
+  readonly browserGate?: SiteGateResult;
   readonly outDir: string;
   readonly artifactsDir: string;
 }
@@ -213,7 +217,7 @@ function renderFactText(value: unknown, depth = 0): string {
  * CLI can both assert on the same result.
  */
 export async function runFixtureEndToEnd(
-  options: { runId?: string } = {},
+  options: { runId?: string; browser?: boolean } = {},
 ): Promise<FixtureArtifacts> {
   const result = await buildFixtureSite(options.runId ?? 'b_fixture');
 
@@ -241,7 +245,7 @@ export async function runFixtureEndToEnd(
   // ---- 13. gate ----------------------------------------------------------------------------
   const buildManifest = JSON.parse(
     readFileSync(join(outDir, '_ada', 'build-manifest.json'), 'utf8'),
-  ) as { js_bytes_by_route: Record<string, number> };
+  ) as { js_bytes_by_route: Record<string, number>; routes: string[] };
 
   const gate = runStaticGate({
     site: {
@@ -255,6 +259,37 @@ export async function runFixtureEndToEnd(
     context: gateContextFor(result),
     policyVersion: GATE_POLICY_VERSION,
   });
+
+  // ---- 13b. the browser pass ---------------------------------------------------------------
+  // The static pass decided everything the build output can decide. This is the rest: axe with
+  // the full tag set, computed focus states, tab order, the LCP element, the network log, and an
+  // actual count of animations running under `prefers-reduced-motion: reduce`.
+  //
+  // It is not optional and it is not skipped on failure. `options.browser: false` exists for the
+  // unit suite, which must not require a browser binary to typecheck the package.
+  const browserGate =
+    options.browser === false
+      ? undefined
+      : await runBrowserPass({
+          root: outDir,
+          origin: FIXTURE_ORIGIN,
+          context: gateContextFor(result),
+          build: {
+            siteDefinitionHash: result.siteDefinitionHash,
+            jsBytesByRoute: buildManifest.js_bytes_by_route,
+            sitemapRoutes: [
+              ...readFileSync(join(outDir, 'sitemap.xml'), 'utf8').matchAll(
+                /<loc>\s*([^<\s]+)\s*<\/loc>/g,
+              ),
+            ].map((match) => new URL(match[1] as string).pathname),
+            robotsTxt: readFileSync(join(outDir, 'robots.txt'), 'utf8'),
+            llmsTxt: null,
+            allowedHosts: [],
+            buildYear: new Date().getFullYear(),
+          },
+          routes: buildManifest.routes,
+          policyVersion: GATE_POLICY_VERSION,
+        });
 
   // ---- 14-15. the two client-facing documents ----------------------------------------------
   writeFileSync(
@@ -271,10 +306,20 @@ export async function runFixtureEndToEnd(
     join(artifactsDir, 'gate-report.json'),
     JSON.stringify(
       {
-        canShip: gate.canShip,
-        fatal: gate.fatal,
-        needsReview: gate.needsReview,
-        reports: gate.reports,
+        static: {
+          canShip: gate.canShip,
+          fatal: gate.fatal,
+          needsReview: gate.needsReview,
+          reports: gate.reports,
+        },
+        browser: browserGate
+          ? {
+              canShip: browserGate.canShip,
+              fatal: browserGate.fatal,
+              needsReview: browserGate.needsReview,
+              reports: browserGate.reports,
+            }
+          : null,
       },
       null,
       2,
@@ -282,18 +327,27 @@ export async function runFixtureEndToEnd(
     'utf8',
   );
 
-  return { result, gate, outDir, artifactsDir };
+  return {
+    result,
+    gate,
+    ...(browserGate === undefined ? {} : { browserGate }),
+    outDir,
+    artifactsDir,
+  };
 }
 
 export function reportLines(artifacts: FixtureArtifacts): string[] {
-  const { result, gate } = artifacts;
+  const { result, gate, browserGate } = artifacts;
   return [
     `site definition hash  ${result.siteDefinitionHash.slice(0, 16)}`,
     `sections              ${result.sections.map((s) => s.variant.id).join(', ')}`,
     `model calls           ${result.state.model_calls.length}, $${result.state.cost_usd.toFixed(4)}`,
     `ruled out             ${result.manifest.decisions.flatMap((d) => d.ruled_out).length} row(s)`,
     `gap report            ${result.gapReport.unlocks.length} unlock(s)`,
-    summariseResult(gate),
+    `static pass           ${summariseResult(gate)}`,
+    browserGate
+      ? `browser pass          ${summariseResult(browserGate)}`
+      : 'browser pass          skipped',
   ];
 }
 

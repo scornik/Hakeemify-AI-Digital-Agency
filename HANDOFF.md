@@ -138,8 +138,8 @@ Nothing below is hidden in the code; each has a comment at the site and an entry
 | **Model provider** | `packages/pipeline/src/model/fake.ts` | Every test and the e2e use a deterministic fake. **No real provider has ever been called by this code.** |
 | **Copy generation** | `packages/pipeline/src/build.ts` (`SlotPlanner`) | Stage 10 takes copy from a planner the caller supplies. The fixture writes its own strings, held to the same `grounded_in` leash. The model call is not wired. |
 | **Anti-slop tier 2** | — | **Not implemented.** The warning-only cliché judge that grows the tier-1 list from real output. Tiers 1 and 3 are complete. |
-| **Browser half of the gate** | `packages/gate/src/artifacts/browser-gatherer.ts`, `runner.ts` | Implemented and unit-tested; **not wired into `e2e:fixture`**. The static pass (~30 checks) is what runs today. |
-| **Reduced-motion assertion** | `packages/library/tests/render.test.ts` | Static half only: the kill switch is in the document and the build ships no JS. The `document.getAnimations()` assertion needs the browser pass. |
+| **Browser half of the gate** | `packages/gate/src/browser-pass.ts` | **Wired in and green** across the five-project matrix. `pnpm e2e:fixture` runs both passes and fails on either. Lighthouse/LHCI is configured in `policy.ts` but not executed. |
+| **Reduced-motion assertion** | `packages/gate/src/browser-pass.ts` | **Done.** The `reduced-motion` project counts running animations in a real browser and asserts zero. |
 | **Reference renders** | `packages/library/src/references/` | Addressing, storage contract and resolver are done. No render has been produced — that needs authored arrangements. |
 | **Telemetry, priors, diversity ledger** | — | Event contract designed in v4 §10/§18; not implemented. Nothing depends on them yet. |
 | **Postgres** | `docker-compose.yml` | Container configured; no Drizzle schema written. Everything persists in memory (`MemoryCheckpointStore`). |

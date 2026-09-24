@@ -568,3 +568,68 @@ refuses to skip a promised artifact — but wiring Playwright execution into `e2
 done. Two model-facing stages are also stubbed: copy generation goes through a `SlotPlanner` the
 fixture supplies rather than a model call, and anti-slop tier 2 (the warning-only cliché judge)
 is not implemented at all. Both are listed in `HANDOFF.md`.
+
+---
+
+## P6b — the browser pass, wired in
+
+**DoD:** `pnpm e2e:fixture` exits 0 with **both** passes green — the static pass on every page,
+and the browser pass across the five-project matrix. ✅ — 505 tests.
+
+P6 shipped with the browser half of the gate implemented, unit-tested and *never run*. That was
+recorded honestly as a residual gap, and it was the largest one: about fifteen checks were
+permanently `notApplicable`, including every axe rule, focus visibility, tab order, the LCP
+element, the network log and the reduced-motion assertion. Running it took an afternoon and found
+five classes of defect in the first five minutes.
+
+### What running it caught
+
+**The design system was reaching nothing.** Every component wrote `var(--ds-color-accent-bg, …)`
+while the token compiler emits `--ds-accent-bg`. Seven names were wrong, so every one silently
+used its hard-coded fallback and `tokens.css` might as well not have been linked. Nothing in the
+static pass can see this — the markup is identical either way — and it surfaced as an axe
+contrast violation on the call-to-action, because the fallback green was 2.1:1 against white.
+This is the single best argument for the browser pass existing.
+
+**The layout's reset was scoped, so it applied to nothing.** Astro scopes `<style>` to its
+component; the layout's `img { max-width: 100% }` therefore never reached a section's markup, and
+the 2400px hero overflowed at every viewport. The reset is now `is:global`. The finding arrived
+as `structure.no-horizontal-scroll` reporting `scrollWidth: 2400` at 320, 412, 768 and 1350.
+
+**Links were the user agent's `#0000ee`.** Fine at 8.6:1 on white, 1.69:1 on the dark scheme's
+background — and the `dark` project is the only thing in the system that would ever have looked.
+This is exactly the failure P3 predicted when it made the contrast compiler check every
+condition rather than the base scheme alone; the compiler checks *declared* pairs, and an
+unstyled link declares nothing. Links now take `--ds-accent-bg` with an underline, so colour is
+not carrying the distinction alone.
+
+**The fixture referenced images that did not exist.** Four 404s, caught by `bp.console-clean` and
+`bp.no-failed-requests`. Placeholder files now ship in `astro/public/`; they are 1×1 images
+scaled by the browser, standing in for a photographer's work, because anything prettier would be
+a design decision.
+
+**One finding was my own wiring, not the site.** The first run reported
+`seo.sitemap-consistency` against a sitemap that was correct: I had hand-written
+`sitemapRoutes` as full URLs where the check compares pathnames. The browser pass now parses the
+sitemap the renderer emitted, which is the general lesson — restating what a build *should* have
+produced is how a wiring bug masquerades as a site defect.
+
+### Decisions
+
+**The browser pass is a separate entry point, and a browser that will not start is a failure.**
+`BrowserUnavailableError` says so in its message. The alternative — falling back to the static
+subset — is the failure mode the whole two-pass split exists to prevent, and it would report
+green.
+
+**Both passes use the same `gatherStatic`.** The browser pass feeds it `page.content()` rather
+than the file on disk, so one artifact shape comes out of both and no check can tell which
+produced it. The browser adds only what a browser knows.
+
+**The site is served over HTTP, not loaded from `file://`.** A `file://` page has no origin, so
+no meaningful network log, no `fetch`, and none of the absolute-versus-relative URL bugs that
+only appear over HTTP. The server is 60 lines of `node:http` with no dependency, and it refuses a
+path that escapes the root — a test server that can read the repository is a test server that
+will eventually be pointed at one.
+
+**Measurements are taken after `document.fonts.ready`.** Fonts change layout, and layout changes
+contrast, target size and overflow.

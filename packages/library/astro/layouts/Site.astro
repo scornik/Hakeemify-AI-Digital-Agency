@@ -35,12 +35,20 @@ const robots = [page.seo.robots.index ? 'index' : 'noindex', page.seo.robots.fol
     <link rel="icon" href="/favicon.svg" />
     <meta name="theme-color" content="#1d2a24" />
     <style set:html={tokensCss}></style>
-    <style>
-      body { margin: 0; background: var(--ds-color-bg-base, #fff); color: var(--ds-color-fg-primary, #111); font-family: system-ui, sans-serif; }
+    <style is:global>
+      body { margin: 0; background: var(--ds-bg-base, #fff); color: var(--ds-fg-primary, #111); font-family: system-ui, sans-serif; }
       main > section { padding-block: var(--ds-space-5, 40px); padding-inline: max(16px, var(--ds-space-3, 24px)); }
       img { max-width: 100%; height: auto; }
-      a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--ds-color-accent-bg, #0b6); outline-offset: 2px; }
-      .wrap { max-width: var(--ds-layout-max-width, 1180px); margin-inline: auto; }
+      /*
+       * Links must take their colour from the design system. Left unstyled they inherit the
+       * user agent's #0000ee, which passes against white and fails at 1.69:1 against the dark
+       * scheme's background — the dark project caught exactly that. The underline carries the
+       * distinction so colour is not doing the work alone.
+       */
+      a { color: var(--ds-accent-bg, #1f4e8c); text-underline-offset: 2px; }
+      a:hover { color: var(--ds-fg-primary, #111); }
+      a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--ds-accent-bg, #0b6); outline-offset: 2px; }
+      .wrap { max-width: var(--ds-grid-max-width, 1180px); margin-inline: auto; }
     </style>
     {page.seo.schema_org.map((block) => (
       <script type="application/ld+json" set:html={JSON.stringify(block.data)} />

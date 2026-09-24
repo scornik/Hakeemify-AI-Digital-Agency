@@ -11,3 +11,5 @@ export * from './checks/index.js';
 export * from './artifacts/static-gatherer.js';
 export * from './artifacts/fixture-site.js';
 export * from './artifacts/browser-gatherer.js';
+export * from './artifacts/serve.js';
+export * from './browser-pass.js';
