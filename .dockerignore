@@ -1,0 +1,44 @@
+# Everything the build does not need, and a few things it must not have.
+#
+# node_modules is excluded deliberately: the image installs from the lockfile so the dependency
+# tree is the one the lockfile describes, not whatever happens to be on the machine that ran
+# `docker build`. Copying a host tree in would also copy a host-platform esbuild binary.
+
+node_modules
+**/node_modules
+
+# Build output. Regenerated inside the image.
+dist
+**/dist
+**/dist-site
+**/dist-e2e
+**/.astro
+**/.turbo
+*.tsbuildinfo
+packages/library/build
+
+# Run output.
+artifacts
+_proposed
+coverage
+**/coverage
+test-results
+playwright-report
+blob-report
+.lighthouseci
+
+# Never in an image.
+.env
+.env.*
+!.env.example
+
+# Not needed at runtime, and ~60 MB of it.
+.git
+research
+docs
+
+# Local editor and OS noise.
+.vscode
+.idea
+.DS_Store
+Thumbs.db

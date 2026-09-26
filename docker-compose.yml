@@ -16,5 +16,28 @@ services:
     volumes:
       - ada_pgdata:/var/lib/postgresql/data
 
+  # The engine. A batch job, not a service: `docker compose run --rm engine` rather than `up`.
+  # `up` would start it, run one build, and exit — which looks like a crashing service.
+  engine:
+    build: .
+    # Chromium's renderers need more than Docker's default 64 MB of /dev/shm; below ~512 MB it
+    # crashes mid-page and Playwright reports a timeout, which points at the wrong thing.
+    shm_size: '1gb'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # `postgres`, not localhost: inside the compose network the host is the service name.
+      DATABASE_URL: postgres://ada:ada@postgres:5432/ada
+      # Raise per invocation. The image default is a tripwire against a real provider being wired
+      # in by accident, not a budget.
+      ADA_MAX_COST_USD: '${ADA_MAX_COST_USD:-0.01}'
+    volumes:
+      # The three documents a run produces, so they outlive the container.
+      - ./artifacts:/app/artifacts
+      # The tier-2 proposal queue. Nothing reads it back into a rule pack; promotion to tier 1 is
+      # a human editing tier1.ts.
+      - ./_proposed:/app/_proposed
+
 volumes:
   ada_pgdata:
