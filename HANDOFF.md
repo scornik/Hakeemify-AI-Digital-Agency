@@ -138,13 +138,13 @@ Nothing below is hidden in the code; each has a comment at the site and an entry
 | **Archetypes, positioning, playbook** | `packages/pipeline/src/e2e/fixture-assets.ts` | Fixture data transcribed from v4 §5–§7, deliberately outside the library's `assets/` tree. |
 | **Model provider** | `packages/pipeline/src/model/fake.ts` | Every test and the e2e use a deterministic fake. **No real provider has ever been called by this code.** |
 | **Copy generation** | `packages/pipeline/src/build.ts` (`SlotPlanner`) | Stage 10 takes copy from a planner the caller supplies. The fixture writes its own strings, held to the same `grounded_in` leash. The model call is not wired. |
-| **Anti-slop tier 2** | — | **Not implemented.** The warning-only cliché judge that grows the tier-1 list from real output. Tiers 1 and 3 are complete. |
+| **Anti-slop tier 2** | `packages/pipeline/src/antislop/tier2.ts` | **Built, warning only.** `tier2Blocks()` returns false unconditionally. Writes proposals to `/_proposed/anti-slop-bans.jsonl`; there is no code path from the queue back to `BANNED_COPY` — promotion is a human editing `tier1.ts`. Not wired into `build.ts`: it needs a provider. |
 | **Browser half of the gate** | `packages/gate/src/browser-pass.ts` | **Wired in and green** across the five-project matrix. |
 | **Resource budgets** | `packages/gate/src/lighthouse-pass.ts` | **Wired in and green.** Lighthouse's Node API, three runs, the median asserted against the same `LHCI_ASSERTIONS` in `policy.ts`. An error-level budget that produced no value is fatal, not a pass. |
 | **Reduced-motion assertion** | `packages/gate/src/browser-pass.ts` | **Done.** The `reduced-motion` project counts running animations in a real browser and asserts zero. |
 | **Reference renders** | `packages/library/src/references/` | Addressing, storage contract and resolver are done. No render has been produced — that needs authored arrangements. |
 | **Telemetry, priors, diversity ledger** | — | Event contract designed in v4 §10/§18; not implemented. Nothing depends on them yet. |
-| **Postgres** | `docker-compose.yml` | Container configured; no Drizzle schema written. Everything persists in memory (`MemoryCheckpointStore`). |
+| **Postgres** | `packages/db/` | **Schema written** — all thirteen ARCHITECTURE §4 tables, migration generated and committed, tenancy structural via composite foreign keys. **Not connected:** nothing opens a pool and the pipeline still persists in memory (`MemoryCheckpointStore`). Regenerate with `pnpm --filter @ada/db run db:generate`; there is no automatic drift check. |
 | **Visual editor** | — | Post-V1 by design. The renderer stamps `data-sd-path` and `data-sd-id` on every section and field so it stays possible. |
 
 ---
@@ -199,6 +199,8 @@ source of a reason.
   **Decisions** subsections are the useful part; each explains something non-obvious or somewhere
   the spec was silent and had to be read a particular way.
 - `BLOCKED.md` — the four open decisions.
+- `docs/EXTENDING.md` — how to add a model provider, wire a model call, author a section, and
+  review the Bangladesh claim pack. Start here for any of those four.
 - `docs/ARCHITECTURE.md` — authoritative on technical decisions.
 - `docs/section-metadata-schema.md` — the domain model (v4).
 - `docs/gate-checklist.md` — 125 rows; `packages/gate/src/checks/` cites row numbers.
