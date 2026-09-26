@@ -1,5 +1,5 @@
 {
-  "id": "3d5b2593-fdbf-4753-9c5d-735e9d20edfe",
+  "id": "640736b7-099c-4ed4-a4df-ba7c147d039b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -496,7 +496,12 @@
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "facts_verification_check": {
+          "name": "facts_verification_check",
+          "value": "\"verification\" IN ('unverified', 'owner_confirmed', 'source_checked')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.gate_reports": {
@@ -786,7 +791,12 @@
       },
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "priors_status_check": {
+          "name": "priors_status_check",
+          "value": "\"status\" IN ('insufficient', 'provisional', 'established')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.run_events": {
@@ -1047,7 +1057,12 @@
       },
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "runs_status_check": {
+          "name": "runs_status_check",
+          "value": "\"status\" IN ('IDLE', 'RUNNING', 'WAITING_FOR_OWNER', 'WAITING_FOR_REVIEW', 'FINISHED', 'ERROR', 'STUCK', 'BUDGET_EXCEEDED')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.site_versions": {
@@ -1210,7 +1225,16 @@
       },
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "site_versions_status_check": {
+          "name": "site_versions_status_check",
+          "value": "\"status\" IN ('draft', 'published', 'archived')"
+        },
+        "site_versions_created_by_check": {
+          "name": "site_versions_created_by_check",
+          "value": "\"created_by\" IN ('pipeline', 'owner_edit', 'migration')"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.sites": {

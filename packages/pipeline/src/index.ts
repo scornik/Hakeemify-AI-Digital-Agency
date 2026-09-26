@@ -17,3 +17,4 @@ export * from './antislop/tier3.js';
 export * from './library-adapter.js';
 export * from './build.js';
 export * from './run.js';
+export * from './postgres-store.js';

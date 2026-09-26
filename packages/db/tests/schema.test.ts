@@ -198,6 +198,25 @@ describe('enumerations', () => {
     expect([...SITE_VERSION_STATUSES]).toEqual(['draft', 'published', 'archived']);
     expect(FACT_VERIFICATIONS.length).toBeGreaterThan(1);
   });
+
+  it('backs every enumerated column with a real CHECK, not just a TypeScript narrowing', () => {
+    // `text(..., { enum })` narrows the type and emits no constraint. Running the migration and
+    // inserting `status = 'PROBABLY_FINE'` succeeded until these checks existed, which made every
+    // "the database constrains this" claim about an enum column false. `live.test.ts` now asserts
+    // the rejection against a real engine; this asserts the constraint is declared at all.
+    const expected: Record<string, string[]> = {
+      site_versions: ['site_versions_status_check', 'site_versions_created_by_check'],
+      facts: ['facts_verification_check'],
+      runs: ['runs_status_check'],
+      priors: ['priors_status_check'],
+    };
+    for (const [tableKey, names] of Object.entries(expected)) {
+      const table = Object.values(ALL_TABLES).find((t) => getTableName(t) === tableKey);
+      expect(table, `${tableKey} not found`).toBeDefined();
+      const declared = getTableConfig(table!).checks.map((c) => c.name);
+      for (const name of names) expect(declared, tableKey).toContain(name);
+    }
+  });
 });
 
 describe('telemetry', () => {

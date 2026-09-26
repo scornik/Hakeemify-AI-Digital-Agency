@@ -31,6 +31,7 @@
 import { relations, sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   doublePrecision,
   foreignKey,
   index,
@@ -59,6 +60,18 @@ const createdAt = () =>
 
 /** Text ids rather than uuid columns: the pipeline already mints readable ones (`b_fixture`). */
 const id = (name: string) => text(name).notNull();
+
+/**
+ * A real `CHECK` for an enumerated text column.
+ *
+ * Drizzle's `text(..., { enum })` is a **TypeScript** narrowing and emits no constraint: the
+ * database will accept any string. That was found by running the migration and inserting
+ * `status = 'PROBABLY_FINE'`, which succeeded — so every "the database constrains this" claim
+ * about an enum column was false until this existed. `pgEnum` would also work; a check keeps the
+ * values visible in the SQL and makes adding one an ordinary migration rather than a type change.
+ */
+const enumCheck = (name: string, column: string, values: readonly string[]) =>
+  check(name, sql.raw(`"${column}" IN (${values.map((v) => `'${v}'`).join(', ')})`));
 
 // ---------------------------------------------------------------------------------------------
 // Sites and versions
@@ -115,6 +128,8 @@ export const siteVersions = pgTable(
     uniqueIndex('site_versions_one_published')
       .on(table.siteId)
       .where(sql`status = 'published'`),
+    enumCheck('site_versions_status_check', 'status', SITE_VERSION_STATUSES),
+    enumCheck('site_versions_created_by_check', 'created_by', VERSION_AUTHORS),
     index('site_versions_site_idx').on(table.siteId, table.createdAt),
   ],
 );
@@ -145,6 +160,7 @@ export const facts = pgTable(
     // grounds against the other.
     unique('facts_site_path_unique').on(table.siteId, table.path),
     index('facts_quotable_idx').on(table.siteId, table.quotable),
+    enumCheck('facts_verification_check', 'verification', FACT_VERIFICATIONS),
   ],
 );
 
@@ -241,6 +257,7 @@ export const runs = pgTable(
       name: 'runs_version_fk',
     }),
     index('runs_status_idx').on(table.siteId, table.status),
+    enumCheck('runs_status_check', 'status', RUN_STATUSES),
   ],
 );
 
@@ -401,12 +418,20 @@ export const priors = pgTable(
     stratum: jsonb('stratum').notNull(),
     status: text('status', { enum: PRIOR_STATUSES }).notNull().default('insufficient'),
     evidence: jsonb('evidence').notNull(),
+    /**
+     * `window` is a reserved word in Postgres (window functions), so hand-written SQL against
+     * this column must quote it. Drizzle always does; a psql session will not. Kept because
+     * ARCHITECTURE §4 names it.
+     */
     window: text('window').notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
       .notNull()
       .defaultNow(),
   },
-  (table) => [primaryKey({ columns: [table.arrangementId, table.window] })],
+  (table) => [
+    primaryKey({ columns: [table.arrangementId, table.window] }),
+    enumCheck('priors_status_check', 'status', PRIOR_STATUSES),
+  ],
 );
 
 /** Also cross-tenant by design: diversity is only meaningful over the whole population. */

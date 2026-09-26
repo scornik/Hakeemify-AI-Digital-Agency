@@ -20,6 +20,7 @@
     "@ada/contract": "workspace:*",
     "@ada/library": "workspace:*",
     "@ada/gate": "workspace:*",
-    "zod": "4.6.5"
+    "zod": "4.6.5",
+    "@ada/db": "workspace:*"
   }
 }

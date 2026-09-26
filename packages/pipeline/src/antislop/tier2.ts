@@ -44,7 +44,7 @@ import { dirname } from 'node:path';
 import { stableHash } from '@ada/contract';
 
 import { TIER1_VERSION, BANNED_COPY } from './tier1.js';
-import type { ModelProvider, ModelRequest } from '../model/wrapper.js';
+import type { BudgetLedger, ModelProvider, ModelRequest } from '../model/wrapper.js';
 import type { JsonSchemaObject } from '@ada/contract';
 
 export const TIER2_VERSION = 'tier2@1';
@@ -137,7 +137,13 @@ export interface Tier2Options {
   readonly provider: ModelProvider;
   /** Generated copy only, keyed `sectionInstanceId.slot`. Facts are never judged. */
   readonly copy: Readonly<Record<string, string>>;
-  readonly maxCostUsd?: number;
+  /**
+   * The run's budget ledger. **Pass it.** Tier 2 spends real money, and a call the ledger cannot
+   * see is a call that does not count against `max_cost_usd` or `max_model_calls` — the same
+   * class of bug as a provider retrying internally, arriving from the one tier that is not
+   * allowed to affect the outcome. Omitted only in unit tests that assert the judge's parsing.
+   */
+  readonly ledger?: BudgetLedger;
 }
 
 /**
@@ -164,10 +170,35 @@ export async function runTier2(options: Tier2Options): Promise<Tier2Result> {
     seed: 0,
   };
 
+  // Checked before the call, like every other model node. Tier 2 is the lowest-value call in the
+  // run, so it is the one that should be skipped when the budget is nearly gone — not the one
+  // that exhausts it and leaves the copy call with nothing.
+  const ledger = options.ledger;
+  if (ledger !== undefined) {
+    if (ledger.calls >= ledger.max_calls) {
+      return {
+        judged: false,
+        proposals: [],
+        skipped: `the run had already used its ${ledger.max_calls} model call(s)`,
+        cost_usd: 0,
+      };
+    }
+    if (ledger.cost_usd >= ledger.max_cost_usd) {
+      return {
+        judged: false,
+        proposals: [],
+        skipped: `the run had already reached its $${ledger.max_cost_usd} ceiling`,
+        cost_usd: 0,
+      };
+    }
+    ledger.calls += 1;
+  }
+
   let cost = 0;
   try {
     const response = await options.provider.complete(request);
     cost = response.cost_usd;
+    if (ledger !== undefined) ledger.cost_usd += cost;
 
     if (response.finish_reason !== 'stop') {
       return {

@@ -20,9 +20,12 @@
   "dependencies": {
     "@ada/contract": "workspace:*",
     "drizzle-orm": "0.45.3",
-    "zod": "4.6.5"
+    "zod": "4.6.5",
+    "pg": "8.23.0"
   },
   "devDependencies": {
-    "drizzle-kit": "0.31.11"
+    "drizzle-kit": "0.31.11",
+    "@electric-sql/pglite": "0.5.8",
+    "@types/pg": "^8.15.6"
   }
 }

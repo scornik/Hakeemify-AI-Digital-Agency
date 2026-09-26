@@ -60,7 +60,8 @@ CREATE TABLE "facts" (
 	"quotable" boolean DEFAULT false NOT NULL,
 	"verification" text DEFAULT 'unverified' NOT NULL,
 	CONSTRAINT "facts_site_id_fact_id_pk" PRIMARY KEY("site_id","fact_id"),
-	CONSTRAINT "facts_site_path_unique" UNIQUE("site_id","path")
+	CONSTRAINT "facts_site_path_unique" UNIQUE("site_id","path"),
+	CONSTRAINT "facts_verification_check" CHECK ("verification" IN ('unverified', 'owner_confirmed', 'source_checked'))
 );
 --> statement-breakpoint
 CREATE TABLE "gate_reports" (
@@ -100,7 +101,8 @@ CREATE TABLE "priors" (
 	"evidence" jsonb NOT NULL,
 	"window" text NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "priors_arrangement_id_window_pk" PRIMARY KEY("arrangement_id","window")
+	CONSTRAINT "priors_arrangement_id_window_pk" PRIMARY KEY("arrangement_id","window"),
+	CONSTRAINT "priors_status_check" CHECK ("status" IN ('insufficient', 'provisional', 'established'))
 );
 --> statement-breakpoint
 CREATE TABLE "run_events" (
@@ -125,7 +127,8 @@ CREATE TABLE "runs" (
 	"iterations" integer DEFAULT 0 NOT NULL,
 	"seed" integer NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "runs_site_id_run_id_pk" PRIMARY KEY("site_id","run_id")
+	CONSTRAINT "runs_site_id_run_id_pk" PRIMARY KEY("site_id","run_id"),
+	CONSTRAINT "runs_status_check" CHECK ("status" IN ('IDLE', 'RUNNING', 'WAITING_FOR_OWNER', 'WAITING_FOR_REVIEW', 'FINISHED', 'ERROR', 'STUCK', 'BUDGET_EXCEEDED'))
 );
 --> statement-breakpoint
 CREATE TABLE "site_versions" (
@@ -141,7 +144,9 @@ CREATE TABLE "site_versions" (
 	"schema_version" integer NOT NULL,
 	"created_by" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "site_versions_site_id_version_id_pk" PRIMARY KEY("site_id","version_id")
+	CONSTRAINT "site_versions_site_id_version_id_pk" PRIMARY KEY("site_id","version_id"),
+	CONSTRAINT "site_versions_status_check" CHECK ("status" IN ('draft', 'published', 'archived')),
+	CONSTRAINT "site_versions_created_by_check" CHECK ("created_by" IN ('pipeline', 'owner_edit', 'migration'))
 );
 --> statement-breakpoint
 CREATE TABLE "sites" (

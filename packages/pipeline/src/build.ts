@@ -37,7 +37,10 @@ import {
 import { buildManifest, ruledOutFor, type Decision, type DecisionManifest } from './manifest.js';
 import { buildGapReport, type GapReport, type UnlockKind } from './gap-report.js';
 import { runTier1, type SlopInput } from './antislop/tier1.js';
+import { join } from 'node:path';
+
 import { detectTier3, tier3Blocks, type BuildSample } from './antislop/tier3.js';
+import { appendProposals, runTier2, tier2Records, type Tier2Result } from './antislop/tier2.js';
 import {
   MemoryMemoStore,
   callRecord,
@@ -98,6 +101,19 @@ export interface BuildInput {
   readonly budgets?: Partial<Budgets>;
   /** The last hundred builds, for tier 3. Empty on a first build. */
   readonly recentBuilds?: readonly BuildSample[];
+  /**
+   * The tier-2 cliché judge. **Opt in.** Tier 2 cannot block and cannot change the output, so it
+   * is the one model call in the run that buys nothing for this build — it exists to grow tier 1
+   * for the next hundred. Making it default-on would spend budget on every build for a benefit
+   * that accrues to a reviewer, and would make the fixture's call count depend on a tier that is
+   * explicitly not reproducible.
+   */
+  readonly tier2Judge?: ModelProvider;
+  /**
+   * Where proposals are appended. Defaults to `_proposed/anti-slop-bans.jsonl` under the working
+   * directory. Nothing reads this file back: promotion to tier 1 is a human editing `tier1.ts`.
+   */
+  readonly tier2ProposalPath?: string;
 }
 
 export interface BuildResult {
@@ -108,6 +124,11 @@ export interface BuildResult {
   readonly gapReport: GapReport;
   readonly snapshot: PredicateSnapshot;
   readonly sections: readonly PlacedSection[];
+  /**
+   * Tier 2's verdict. Always present, so a caller can tell "the judge was not asked" from "the
+   * judge found nothing" — which are the two readings of an absent field and mean opposite things.
+   */
+  readonly tier2: Tier2Result;
 }
 
 export class BuildFailed extends Error {
@@ -564,9 +585,42 @@ export async function runBuild(input: BuildInput): Promise<BuildResult> {
       state,
     );
   }
+  // Tier 2 runs last of the three and after both blocking tiers have passed. Judging copy that
+  // tier 1 was about to reject would spend a call to produce advice about a build that is not
+  // shipping.
+  const tier2: Tier2Result =
+    input.tier2Judge === undefined
+      ? {
+          judged: false,
+          proposals: [],
+          skipped: 'no tier-2 judge was configured for this run',
+          cost_usd: 0,
+        }
+      : // `copyForSlop`, not `generatedCopy`: the flat array has no slot, and a proposal that
+        // cannot say where a phrase came from is not reviewable.
+        await runTier2({ provider: input.tier2Judge, copy: copyForSlop, ledger });
+
+  if (tier2.proposals.length > 0) {
+    // Written here rather than returned for the caller to write, because a proposal queue that
+    // depends on every caller remembering to flush it is a queue that stays empty.
+    const written = appendProposals(
+      input.tier2ProposalPath ?? join('_proposed', 'anti-slop-bans.jsonl'),
+      tier2Records(tier2, { runId: input.runId, niche: input.niche }),
+    );
+    state = appendEvent(state, 'StageCompleted', 'anti_slop', {
+      tier2_proposals: tier2.proposals.length,
+      tier2_appended: written,
+    });
+  }
+
   state = appendEvent(state, 'StageCompleted', 'anti_slop', {
     tier1_warnings: tier1.violations.length,
     tier3_flags: tier3Flags.length,
+    // Recorded as a tri-state, not a count: a zero that means "not asked" and a zero that means
+    // "nothing found" are the same number and different facts.
+    tier2_judged: tier2.judged,
+    tier2_proposals: tier2.proposals.length,
+    ...(tier2.skipped === undefined ? {} : { tier2_skipped: tier2.skipped }),
   });
 
   // ---- SiteDefinition ----------------------------------------------------------------------
@@ -663,5 +717,14 @@ export async function runBuild(input: BuildInput): Promise<BuildResult> {
     { unlocks: gapReport.unlocks.length },
   );
 
-  return { state, siteDefinition, siteDefinitionHash, manifest, gapReport, snapshot, sections };
+  return {
+    state,
+    siteDefinition,
+    siteDefinitionHash,
+    manifest,
+    gapReport,
+    snapshot,
+    sections,
+    tier2,
+  };
 }

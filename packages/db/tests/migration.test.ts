@@ -62,6 +62,21 @@ describe('the committed migration', () => {
     expect(sql).toMatch(/"positioning" text(?!\s+NOT NULL)/);
   });
 
+  it('emits a CHECK for every enumerated column', () => {
+    // The gap this closes was found by running the migration, not by reading it: drizzle's
+    // `enum` option is a type narrowing and emits nothing.
+    for (const name of [
+      'runs_status_check',
+      'site_versions_status_check',
+      'site_versions_created_by_check',
+      'facts_verification_check',
+      'priors_status_check',
+    ]) {
+      expect(sql, name).toContain(name);
+    }
+    expect(sql).toContain(`"status" IN ('IDLE', 'RUNNING'`);
+  });
+
   it('requires a seed on every run', () => {
     expect(sql).toContain('"seed" integer NOT NULL');
   });

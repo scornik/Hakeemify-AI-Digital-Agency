@@ -14,7 +14,7 @@ import {
   type Tier2Result,
 } from '../src/antislop/tier2.js';
 import { BANNED_COPY } from '../src/antislop/tier1.js';
-import type { ModelProvider } from '../src/model/wrapper.js';
+import type { BudgetLedger, ModelProvider } from '../src/model/wrapper.js';
 
 /** A provider that returns whatever body the test names. */
 function judge(body: unknown, finish: 'stop' | 'length' = 'stop'): ModelProvider {
@@ -226,5 +226,58 @@ describe('the run log', () => {
       proposals: [{ phrase: 'p', slot: 's', reason: 'r', rewrite: 'w' }],
     });
     expect(lines.join(' ')).toContain('never blocking');
+  });
+});
+
+describe('the budget ledger', () => {
+  const ledger = (over: Partial<BudgetLedger> = {}): BudgetLedger => ({
+    calls: 0,
+    cost_usd: 0,
+    max_calls: 8,
+    max_cost_usd: 1,
+    started_at_ms: 0,
+    max_wall_clock_ms: 60_000,
+    now: () => 0,
+    ...over,
+  });
+
+  it('counts its call and its cost, because it spends real money', async () => {
+    // A call the ledger cannot see does not count against max_cost_usd — the same class of bug as
+    // a provider retrying internally, arriving from the one tier not allowed to affect the result.
+    const book = ledger();
+    await runTier2({ provider: judge({ proposals: [] }), copy: COPY, ledger: book });
+    expect(book.calls).toBe(1);
+    expect(book.cost_usd).toBeCloseTo(0.002);
+  });
+
+  it('skips itself rather than exhausting a nearly spent budget', async () => {
+    // Tier 2 is the lowest-value call in the run, so it is the one that should stand down — not
+    // the one that spends the last of the ceiling and leaves the copy call with nothing.
+    const book = ledger({ cost_usd: 1 });
+    const result = await runTier2({ provider: judge({ proposals: [] }), copy: COPY, ledger: book });
+    expect(result.judged).toBe(false);
+    expect(result.skipped).toContain('ceiling');
+    expect(book.calls).toBe(0);
+  });
+
+  it('stands down on the call ceiling too', async () => {
+    const book = ledger({ calls: 8 });
+    const result = await runTier2({ provider: judge({ proposals: [] }), copy: COPY, ledger: book });
+    expect(result.judged).toBe(false);
+    expect(result.skipped).toContain('model call');
+  });
+
+  it('does not charge the ledger when the provider throws', async () => {
+    const book = ledger();
+    const down: ModelProvider = {
+      name: 'down',
+      complete() {
+        throw new Error('unreachable');
+      },
+    };
+    await runTier2({ provider: down, copy: COPY, ledger: book });
+    // The call is counted (it was attempted) but no cost is added, because none was incurred.
+    expect(book.calls).toBe(1);
+    expect(book.cost_usd).toBe(0);
   });
 });
