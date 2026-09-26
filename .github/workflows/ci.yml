@@ -15,9 +15,9 @@ jobs:
     timeout-minutes: 30
 
     services:
-      # Nothing reads DATABASE_URL yet — persistence is MemoryCheckpointStore and the Drizzle
-      # schema (ARCHITECTURE §4) is unwritten. Kept so the first migration has somewhere to run,
-      # not because anything here is covered by it.
+      # Read by the end-to-end run, which applies the committed migration and persists the
+      # fixture build. The unit suite does not need it: it uses Postgres-in-WASM, so the schema
+      # is exercised on a laptop with nothing installed.
       postgres:
         image: postgres:17-alpine
         env:
@@ -72,8 +72,17 @@ jobs:
         run: pnpm run verify
 
       # The acceptance test, not a report: one business through all sixteen stages to a green
-      # gate across all three passes. It exits non-zero when any pass is red.
+      # gate across all three passes, and — because DATABASE_URL is set above — persisted to
+      # Postgres and read back. It exits non-zero when any pass is red.
+      #
+      # No separate migrate step: the fixture applies the committed migration itself, because a
+      # run that needs a shell command first is a run somebody will forget to prepare.
       - name: End to end
+        run: pnpm run e2e:fixture
+
+      # Twice, deliberately. Persisting a deterministic run re-writes rows with the same derived
+      # ids, and the second run is what caught the append-only logs rejecting them.
+      - name: End to end, again (idempotence)
         run: pnpm run e2e:fixture
 
       - name: Upload gate artifacts

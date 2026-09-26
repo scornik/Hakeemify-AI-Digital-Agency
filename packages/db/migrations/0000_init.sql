@@ -33,7 +33,7 @@ CREATE TABLE "edit_actions" (
 	"inverse" jsonb NOT NULL,
 	"txn_id" text NOT NULL,
 	"actor" text NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"ts" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "edit_actions_site_id_action_id_pk" PRIMARY KEY("site_id","action_id"),
 	CONSTRAINT "edit_actions_seq_unique" UNIQUE("site_id","version_id","seq")
 );
@@ -90,7 +90,7 @@ CREATE TABLE "model_calls" (
 	"finish_reason" text NOT NULL,
 	"attempts" integer NOT NULL,
 	"guardrail_codes" text[] DEFAULT '{}' NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"ts" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "model_calls_site_id_call_id_pk" PRIMARY KEY("site_id","call_id")
 );
 --> statement-breakpoint
@@ -112,7 +112,7 @@ CREATE TABLE "run_events" (
 	"parent_id" text,
 	"kind" text NOT NULL,
 	"payload" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"ts" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "run_events_site_id_event_id_pk" PRIMARY KEY("site_id","event_id")
 );
 --> statement-breakpoint
@@ -165,7 +165,7 @@ CREATE TABLE "telemetry_events" (
 	"kind" text NOT NULL,
 	"section_instance_id" text,
 	"props" jsonb DEFAULT '{}'::jsonb NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"ts" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "telemetry_events_site_id_event_id_pk" PRIMARY KEY("site_id","event_id")
 );
 --> statement-breakpoint
@@ -185,9 +185,9 @@ ALTER TABLE "telemetry_events" ADD CONSTRAINT "telemetry_events_site_id_sites_si
 CREATE INDEX "fact_sources_hash_idx" ON "fact_sources" USING btree ("site_id","content_hash");--> statement-breakpoint
 CREATE INDEX "facts_quotable_idx" ON "facts" USING btree ("site_id","quotable");--> statement-breakpoint
 CREATE INDEX "model_calls_run_idx" ON "model_calls" USING btree ("site_id","run_id");--> statement-breakpoint
-CREATE INDEX "run_events_run_idx" ON "run_events" USING btree ("site_id","run_id","created_at");--> statement-breakpoint
+CREATE INDEX "run_events_run_idx" ON "run_events" USING btree ("site_id","run_id","ts");--> statement-breakpoint
 CREATE INDEX "runs_status_idx" ON "runs" USING btree ("site_id","status");--> statement-breakpoint
 CREATE UNIQUE INDEX "site_versions_one_published" ON "site_versions" USING btree ("site_id") WHERE status = 'published';--> statement-breakpoint
 CREATE INDEX "site_versions_site_idx" ON "site_versions" USING btree ("site_id","created_at");--> statement-breakpoint
 CREATE INDEX "sites_tenant_idx" ON "sites" USING btree ("tenant_id");--> statement-breakpoint
-CREATE INDEX "telemetry_kind_idx" ON "telemetry_events" USING btree ("site_id","kind","created_at");
+CREATE INDEX "telemetry_kind_idx" ON "telemetry_events" USING btree ("site_id","kind","ts");

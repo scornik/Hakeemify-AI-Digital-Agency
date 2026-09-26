@@ -158,6 +158,10 @@ outcome a spend guard must not produce.
 DATABASE_URL=postgres://… pnpm --filter @ada/db run db:migrate
 ```
 
+The end-to-end run does not need this: it applies the committed migration itself, because a run
+that needs a shell command prepared first is a run somebody will forget to prepare. Already
+migrated is a no-op.
+
 `migrations/0000_init.sql` is generated from `schema.ts` and committed — code prints DB schema,
 never the reverse. After changing the schema, regenerate with `db:generate`. **There is no
 automatic drift check**: `migration.test.ts` fails if you add a *table* without regenerating, but
@@ -176,5 +180,7 @@ Stated plainly, because a deployment guide that implies more than exists is wors
   invoke the image.
 - **Nothing publishes.** Stage 16 is confirm-gated and unimplemented; the engine writes a folder
   and stops. Getting that folder to a host is currently your deploy step, not its.
-- **`PostgresCheckpointStore` is not used by `runFixtureEndToEnd`.** The fixture still uses the
-  in-memory store, so the database is connected and tested but not yet on the fixture's path.
+- **Persistence is opt-in on `DATABASE_URL`.** With it set, the fixture applies the migration,
+  persists the run and reads it back; without it the run reports `not persisted — DATABASE_URL is
+  not set`. The path does not rot from being optional: `persist-run.test.ts` exercises it on every
+  `pnpm verify` against Postgres-in-WASM, and CI runs the end-to-end twice to hold it idempotent.

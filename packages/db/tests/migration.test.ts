@@ -77,6 +77,13 @@ describe('the committed migration', () => {
     expect(sql).toContain(`"status" IN ('IDLE', 'RUNNING'`);
   });
 
+  it('names the log timestamp `ts`, as ARCHITECTURE §4 specifies', () => {
+    // A hardcoded 'created_at' in the column helper gave all four logs the wrong column name.
+    // Drizzle mapped it consistently, so nothing broke until someone wrote SQL by hand and got
+    // `column "ts" does not exist`. Analytics will not go through the ORM.
+    expect(sql.match(/"ts" timestamp with time zone/g)?.length).toBe(4);
+  });
+
   it('requires a seed on every run', () => {
     expect(sql).toContain('"seed" integer NOT NULL');
   });

@@ -29,7 +29,10 @@ import {
   type SiteGateResult,
 } from '@ada/gate';
 
+import { applyMigration, connect, loadVersion, readEvents, scope, spendForRun } from '@ada/db';
+
 import { runBuild, type BuildResult, type SlotPlan } from '../build.js';
+import { persistRun } from '../postgres-store.js';
 import { toVariantViews } from '../library-adapter.js';
 import { obedientProvider } from '../model/fake.js';
 import type { LibraryView } from '../library-view.js';
@@ -146,6 +149,14 @@ export interface FixtureArtifacts {
   readonly browserGate?: SiteGateResult;
   /** Pass 3: the resource budgets, on the median of three Lighthouse runs. */
   readonly lighthouse?: LighthousePassResult;
+  /**
+   * What was written to Postgres, read back.
+   *
+   * Always present, never optional: `skipped` says why when there was no database. An absent field
+   * would read as "persistence was fine" on a run that never touched a database, which is the same
+   * ambiguity that let the browser pass sit unrun for a milestone.
+   */
+  readonly persistence: FixturePersistence;
   readonly outDir: string;
   readonly artifactsDir: string;
 }
@@ -220,6 +231,97 @@ function renderFactText(value: unknown, depth = 0): string {
   return String(value);
 }
 
+export interface FixturePersistence {
+  readonly persisted: boolean;
+  /** Why not, when not. */
+  readonly skipped?: string;
+  readonly versionId?: string;
+  readonly events?: number;
+  readonly modelCalls?: number;
+  /** Read back from the database, not from the run. Proves the rows are actually there. */
+  readonly readBack?: { versionId: string; events: number; calls: number; costUsd: number };
+}
+
+/**
+ * Persist the run, then read it back.
+ *
+ * The read-back is the point. Writing and reporting success proves the driver accepted the
+ * statements; reading the version, the event count and the summed spend proves the rows exist,
+ * that the tenancy filter finds them, and that the composite foreign keys were satisfied rather
+ * than merely declared. A persistence step that only writes is a persistence step that can be
+ * silently broken for weeks.
+ *
+ * Skipping is reported, never silent. `DATABASE_URL` unset is a legitimate local configuration —
+ * a developer without Docker still needs `pnpm e2e:fixture` to work — but "there was no database"
+ * and "the database is fine" must not look the same in the output.
+ */
+async function persistFixtureRun(
+  result: BuildResult,
+  gate: SiteGateResult,
+  databaseUrl: string | undefined,
+): Promise<FixturePersistence> {
+  if (databaseUrl === undefined || databaseUrl.trim() === '') {
+    return {
+      persisted: false,
+      skipped: 'DATABASE_URL is not set, so the run was not persisted',
+    };
+  }
+
+  const connection = connect({ url: databaseUrl });
+  try {
+    // The fixture owns its schema: a test that needs a shell command run first is a test that gets
+    // skipped. Already-migrated is a no-op.
+    await applyMigration(async (statement) => connection.pool.query(statement));
+
+    const versionId = `v_${result.siteDefinitionHash.slice(0, 12)}`;
+    const written = await persistRun({
+      db: connection.db,
+      siteId: 'ridgeline_roofing',
+      tenantId: 'ada_demo',
+      niche: 'roofing',
+      positioning: 'local_trust',
+      runId: result.state.run_id,
+      versionId,
+      state: result.state,
+      siteDefinition: result.siteDefinition,
+      manifest: result.manifest,
+      gapReport: result.gapReport,
+      gate: {
+        policyVersion: GATE_POLICY_VERSION,
+        checks: gate.reports,
+        summary: { canShip: gate.canShip, fatal: gate.fatal, needsReview: gate.needsReview },
+      },
+    });
+
+    const siteScope = scope('ridgeline_roofing');
+    const version = await loadVersion(connection.db, siteScope, versionId);
+    const events = await readEvents(connection.db, siteScope, result.state.run_id);
+    const spend = await spendForRun(connection.db, siteScope, result.state.run_id);
+
+    if (version === undefined) {
+      throw new Error(
+        `the version was written and cannot be read back: ${versionId}. Either the write did not ` +
+          'commit or the tenancy filter excludes it, and both are worse than a failed write.',
+      );
+    }
+
+    return {
+      persisted: true,
+      versionId,
+      events: written.events,
+      modelCalls: written.modelCalls,
+      readBack: {
+        versionId: version.versionId,
+        events: events.length,
+        calls: spend.calls,
+        costUsd: spend.costUsd,
+      },
+    };
+  } finally {
+    await connection.close();
+  }
+}
+
 /**
  * Build, render, gate, and write the artifacts. Returns rather than exits, so the test and the
  * CLI can both assert on the same result.
@@ -230,6 +332,8 @@ export async function runFixtureEndToEnd(
     browser?: boolean;
     lighthouse?: boolean;
     deployTarget?: DeployTarget;
+    /** Omitted, `DATABASE_URL` is used. Pass `null` to skip persistence explicitly. */
+    databaseUrl?: string | null;
   } = {},
 ): Promise<FixtureArtifacts> {
   const result = await buildFixtureSite(options.runId ?? 'b_fixture');
@@ -385,11 +489,21 @@ export async function runFixtureEndToEnd(
     'utf8',
   );
 
+  // ---- 13d. persist ---------------------------------------------------------------------------
+  // After the gate, because the gate report is part of what is persisted, and a version written
+  // before it was checked is a version whose row says nothing about whether it can ship.
+  const persistence = await persistFixtureRun(
+    result,
+    gate,
+    options.databaseUrl === null ? undefined : (options.databaseUrl ?? process.env['DATABASE_URL']),
+  );
+
   return {
     result,
     gate,
     ...(browserGate === undefined ? {} : { browserGate }),
     ...(lighthouse === undefined ? {} : { lighthouse }),
+    persistence,
     outDir,
     artifactsDir,
   };
@@ -422,7 +536,24 @@ export function reportLines(artifacts: FixtureArtifacts): string[] {
     lighthouse
       ? `budget pass           ${summariseLighthouse(lighthouse)}`
       : 'budget pass           skipped',
+    persistenceLine(artifacts.persistence),
   ];
+}
+
+/**
+ * Reported on every run, green or not. "Not persisted" and "persisted" have to be distinguishable
+ * at a glance, or an optional path becomes an unused one.
+ */
+function persistenceLine(persistence: FixturePersistence): string {
+  if (!persistence.persisted) {
+    return `persistence           not persisted — ${persistence.skipped ?? 'no reason recorded'}`;
+  }
+  const read = persistence.readBack;
+  return (
+    `persistence           postgres — version ${persistence.versionId}, ` +
+    `${read?.events ?? 0} event(s), ${read?.calls ?? 0} model call(s), ` +
+    `$${(read?.costUsd ?? 0).toFixed(4)} read back`
+  );
 }
 
 export { dirname };

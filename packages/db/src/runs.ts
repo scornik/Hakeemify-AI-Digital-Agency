@@ -102,6 +102,24 @@ export interface EventRow {
 }
 
 /**
+ * What to do when a row with this id is already present.
+ *
+ * Both answers are correct in different places, which is why it is a parameter rather than a
+ * policy:
+ *
+ * - **`error`** (the default) is right *during* a run. Two different events sharing an id is a bug
+ *   to surface, not a row to merge, and silently dropping the second would lose a real event.
+ * - **`skip`** is right when **re-persisting a run that already succeeded**. The pipeline is
+ *   deterministic: the same seed produces the same events with the same derived ids, so the row is
+ *   not a different event, it is the same one. `persistRun` passes `skip` for exactly this reason —
+ *   found by running `pnpm e2e:fixture` twice against one database, where the second run failed.
+ *
+ * Never `update`: these tables are append-only, and overwriting a log row is the thing that makes
+ * a log worthless.
+ */
+export type IfExists = 'error' | 'skip';
+
+/**
  * Append events. Batched into one statement: a stage can emit a dozen, and a round trip each would
  * make the log's cost proportional to how carefully the pipeline reports itself.
  */
@@ -109,6 +127,7 @@ export async function appendEvents(
   db: Database,
   scope: SiteScope,
   events: readonly EventRow[],
+  options: { ifExists?: IfExists } = {},
 ): Promise<number> {
   if (events.length === 0) return 0;
   const rows = scope.rowsFor(
@@ -121,9 +140,10 @@ export async function appendEvents(
       payload: (event.payload ?? {}) as never,
     })),
   );
-  // No onConflict: an event id colliding means two different events share an id, which is a bug
-  // to surface rather than a row to merge.
-  await db.insert(runEvents).values(rows as never);
+  const insert = db.insert(runEvents).values(rows as never);
+  await (options.ifExists === 'skip'
+    ? insert.onConflictDoNothing({ target: [runEvents.siteId, runEvents.eventId] })
+    : insert);
   return rows.length;
 }
 
@@ -160,6 +180,7 @@ export async function recordModelCalls(
   db: Database,
   scope: SiteScope,
   calls: readonly ModelCallRowInput[],
+  options: { ifExists?: IfExists } = {},
 ): Promise<number> {
   if (calls.length === 0) return 0;
   const rows = scope.rowsFor(
@@ -180,7 +201,10 @@ export async function recordModelCalls(
       guardrailCodes: [...call.guardrail_codes],
     })),
   );
-  await db.insert(modelCalls).values(rows as never);
+  const insert = db.insert(modelCalls).values(rows as never);
+  await (options.ifExists === 'skip'
+    ? insert.onConflictDoNothing({ target: [modelCalls.siteId, modelCalls.callId] })
+    : insert);
   return rows.length;
 }
 

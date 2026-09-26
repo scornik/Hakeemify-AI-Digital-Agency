@@ -144,7 +144,7 @@ Nothing below is hidden in the code; each has a comment at the site and an entry
 | **Reduced-motion assertion** | `packages/gate/src/browser-pass.ts` | **Done.** The `reduced-motion` project counts running animations in a real browser and asserts zero. |
 | **Reference renders** | `packages/library/src/references/` | Addressing, storage contract and resolver are done. No render has been produced — that needs authored arrangements. |
 | **Telemetry, priors, diversity ledger** | — | Event contract designed in v4 §10/§18; not implemented. Nothing depends on them yet. |
-| **Postgres** | `packages/db/` | **Schema written** — all thirteen ARCHITECTURE §4 tables, migration generated and committed, tenancy structural via composite foreign keys. **Not connected:** nothing opens a pool and the pipeline still persists in memory (`MemoryCheckpointStore`). Regenerate with `pnpm --filter @ada/db run db:generate`; there is no automatic drift check. |
+| **Postgres** | `packages/db/`, `packages/pipeline/src/postgres-store.ts` | **Connected.** `DATABASE_URL=… pnpm e2e:fixture` applies the migration, persists the site, version, run, both logs and the gate report, then reads them back. Idempotent: CI runs it twice. Without `DATABASE_URL` the run reports `not persisted` rather than staying silent. The path is covered on every `pnpm verify` by Postgres-in-WASM, so it does not rot from being optional. Regenerate the migration with `pnpm --filter @ada/db run db:generate`; there is still no automatic drift check. |
 | **Visual editor** | — | Post-V1 by design. The renderer stamps `data-sd-path` and `data-sd-id` on every section and field so it stays possible. |
 
 ---

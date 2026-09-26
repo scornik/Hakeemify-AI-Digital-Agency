@@ -22,5 +22,8 @@
     "@ada/gate": "workspace:*",
     "zod": "4.6.5",
     "@ada/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8"
   }
 }

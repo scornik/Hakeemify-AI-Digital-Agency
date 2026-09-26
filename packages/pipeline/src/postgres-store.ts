@@ -32,13 +32,23 @@ import {
   connect,
   recordModelCalls,
   saveCheckpoint,
+  saveGateReport,
+  saveVersion,
   scope,
+  upsertSite,
   type Connection,
   type Database,
   type SiteScope,
 } from '@ada/db';
 
-import type { Checkpoint, CheckpointStore, ModelCallRecord, RunEvent, Stage } from './state.js';
+import type {
+  Checkpoint,
+  CheckpointStore,
+  ModelCallRecord,
+  PipelineState,
+  RunEvent,
+  Stage,
+} from './state.js';
 
 export interface PostgresStoreOptions {
   readonly db: Database;
@@ -185,4 +195,136 @@ export function postgresStore(options: { siteId: string; url?: string; runId?: s
     }),
     connection,
   };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Persisting a completed run
+// ---------------------------------------------------------------------------------------------
+
+export interface PersistRunInput {
+  readonly db: Database;
+  readonly siteId: string;
+  readonly tenantId: string;
+  readonly niche: string;
+  readonly positioning: string | null;
+  readonly runId: string;
+  readonly versionId: string;
+  readonly state: PipelineState;
+  readonly siteDefinition: unknown;
+  readonly manifest: unknown;
+  readonly gapReport: unknown;
+  readonly schemaVersion?: number;
+  /** Omitted when the gate has not run. */
+  readonly gate?: { policyVersion: string; checks: unknown; summary: unknown };
+}
+
+export interface PersistRunResult {
+  readonly versionId: string;
+  readonly events: number;
+  readonly modelCalls: number;
+  readonly gateReportId: string | null;
+}
+
+/**
+ * Write everything a finished run produced, in dependency order.
+ *
+ * Order is not stylistic: the composite foreign keys mean a version cannot precede its site, and a
+ * run event cannot precede its run. Getting it wrong does not corrupt anything — the database
+ * refuses the row — but it fails in the middle, leaving a half-written run. So the order is
+ * explicit here rather than emergent from whatever the caller happened to do first.
+ *
+ * Not wrapped in a transaction, and that is a choice worth stating: a partially persisted run is
+ * recoverable (every write is an upsert keyed on ids the run already owns, so re-running persists
+ * the rest), whereas a transaction spanning this much work holds a connection for the length of a
+ * build. If a caller needs atomicity it can open one; the default should not.
+ */
+export async function persistRun(input: PersistRunInput): Promise<PersistRunResult> {
+  const siteScope = scope(input.siteId);
+
+  // 1. The site, because every other table references it.
+  await upsertSite(input.db, siteScope, {
+    site_id: input.siteId,
+    tenant_id: input.tenantId,
+    niche: input.niche,
+    positioning: input.positioning,
+  });
+
+  // 2. The version: what rendered, why, and what the owner could change.
+  await saveVersion(input.db, siteScope, {
+    version_id: input.versionId,
+    site_definition: input.siteDefinition,
+    manifest: input.manifest,
+    gap_report: input.gapReport,
+    schema_version: input.schemaVersion ?? 1,
+    created_by: 'pipeline',
+  });
+
+  // 3. The run row, which references the version.
+  await saveCheckpoint(input.db, siteScope, {
+    run_id: input.runId,
+    stage: input.state.stage,
+    status: input.state.status,
+    state: input.state,
+    cost_usd: input.state.cost_usd,
+    iterations: input.state.events.length,
+    seed: input.state.seed,
+    version_id: input.versionId,
+  });
+
+  // 4. The append-only logs.
+  const events = await appendEvents(
+    input.db,
+    siteScope,
+    input.state.events.map((event) => ({
+      // The run's own event id, namespaced by run. Derived rather than random so persisting the
+      // same run twice is an upsert conflict rather than a duplicated log.
+      event_id: `${input.runId}:${event.id}`,
+      run_id: input.runId,
+      parent_id: event.parentId === null ? null : `${input.runId}:${event.parentId}`,
+      kind: event.kind,
+      payload: { stage: event.stage, ts: event.ts, ...event.payload },
+    })),
+    // Re-persisting a run that already succeeded is legitimate: the pipeline is deterministic, so
+    // the same seed produces the same events with the same derived ids. Without this, running
+    // `pnpm e2e:fixture` twice against one database failed on the second.
+    { ifExists: 'skip' },
+  );
+
+  const modelCalls = await recordModelCalls(
+    input.db,
+    siteScope,
+    input.state.model_calls.map((call) => ({
+      call_id: `${input.runId}:${call.call_id}`,
+      run_id: input.runId,
+      stage: call.stage,
+      provider: call.provider,
+      model: call.model,
+      schema_hash: call.schema_hash,
+      prompt_hash: call.prompt_hash,
+      output_hash: call.output_hash,
+      cost_usd: call.cost_usd,
+      duration_ms: call.duration_ms,
+      finish_reason: call.finish_reason,
+      attempts: call.attempts,
+      // Memo hits are recorded too: the audit answers "what did this run do", and a hit is a
+      // decision taken without spending, which is worth being able to see.
+      guardrail_codes: call.guardrail_codes,
+    })),
+    { ifExists: 'skip' },
+  );
+
+  // 5. The gate report, last, because it is the only part that can legitimately be absent.
+  let gateReportId: string | null = null;
+  if (input.gate !== undefined) {
+    gateReportId = `${input.runId}:gate`;
+    await saveGateReport(input.db, siteScope, {
+      report_id: gateReportId,
+      version_id: input.versionId,
+      policy_ver: input.gate.policyVersion,
+      checks: input.gate.checks,
+      summary: input.gate.summary,
+    });
+  }
+
+  return { versionId: input.versionId, events, modelCalls, gateReportId };
 }

@@ -1,5 +1,5 @@
 {
-  "id": "640736b7-099c-4ed4-a4df-ba7c147d039b",
+  "id": "bf9d3125-64ad-4677-b5b9-fc8dd1962eab",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -227,8 +227,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "created_at": {
-          "name": "created_at",
+        "ts": {
+          "name": "ts",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -673,8 +673,8 @@
           "notNull": true,
           "default": "'{}'"
         },
-        "created_at": {
-          "name": "created_at",
+        "ts": {
+          "name": "ts",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -840,8 +840,8 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
-        "created_at": {
-          "name": "created_at",
+        "ts": {
+          "name": "ts",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -865,7 +865,7 @@
               "nulls": "last"
             },
             {
-              "expression": "created_at",
+              "expression": "ts",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1344,8 +1344,8 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
-        "created_at": {
-          "name": "created_at",
+        "ts": {
+          "name": "ts",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -1369,7 +1369,7 @@
               "nulls": "last"
             },
             {
-              "expression": "created_at",
+              "expression": "ts",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

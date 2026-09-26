@@ -52,11 +52,18 @@ import type { Fact, Provenance } from '@ada/contract';
 // ---------------------------------------------------------------------------------------------
 
 /**
- * `timestamptz`, always. A timestamp without a zone is a timestamp whose meaning depends on the
+ * `timestamptz`, always, and the column name is a parameter.
+ *
+ * It was not, and four tables paid for it: `run_events`, `model_calls`, `edit_actions` and
+ * `telemetry_events` declare a `ts` property, and a hardcoded `'created_at'` meant the *column* was
+ * `created_at` on all four — contradicting ARCHITECTURE §4, which names it `ts`. Drizzle mapped it
+ * consistently so nothing broke; it surfaced the first time someone wrote SQL by hand against the
+ * log and got `column "ts" does not exist`. Analytics and psql sessions will not go through the ORM.
+ * A timestamp without a zone is a timestamp whose meaning depends on the
  * server's locale, and this system will run in at least two.
  */
-const createdAt = () =>
-  timestamp('created_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow();
+const createdAt = (name = 'created_at') =>
+  timestamp(name, { withTimezone: true, mode: 'string' }).notNull().defaultNow();
 
 /** Text ids rather than uuid columns: the pipeline already mints readable ones (`b_fixture`). */
 const id = (name: string) => text(name).notNull();
@@ -271,7 +278,7 @@ export const runEvents = pgTable(
     parentId: text('parent_id'),
     kind: text('kind').notNull(),
     payload: jsonb('payload').notNull().default({}),
-    ts: createdAt(),
+    ts: createdAt('ts'),
   },
   (table) => [
     primaryKey({ columns: [table.siteId, table.eventId] }),
@@ -309,7 +316,7 @@ export const modelCalls = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'`),
-    ts: createdAt(),
+    ts: createdAt('ts'),
   },
   (table) => [
     primaryKey({ columns: [table.siteId, table.callId] }),
@@ -368,7 +375,7 @@ export const editActions = pgTable(
     inverse: jsonb('inverse').notNull(),
     txnId: text('txn_id').notNull(),
     actor: text('actor').notNull(),
-    ts: createdAt(),
+    ts: createdAt('ts'),
   },
   (table) => [
     primaryKey({ columns: [table.siteId, table.actionId] }),
@@ -396,7 +403,7 @@ export const telemetryEvents = pgTable(
     /** Which section produced it. Priors are per-arrangement, so this is the join key. */
     sectionInstanceId: text('section_instance_id'),
     props: jsonb('props').notNull().default({}),
-    ts: createdAt(),
+    ts: createdAt('ts'),
   },
   (table) => [
     primaryKey({ columns: [table.siteId, table.eventId] }),
