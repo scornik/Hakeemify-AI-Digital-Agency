@@ -4,6 +4,7 @@
     { "path": "./packages/contract" },
     { "path": "./packages/library" },
     { "path": "./packages/gate" },
+    { "path": "./packages/db" },
     { "path": "./packages/pipeline" }
   ]
 }

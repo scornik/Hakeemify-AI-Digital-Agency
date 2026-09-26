@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs';
 
 import { gatherStatic } from './artifacts/static-gatherer.js';
 import { serveStatic } from './artifacts/serve.js';
+import { MOTION_INIT_SCRIPT } from './artifacts/motion-probe.js';
 import { collectConsole, collectNetwork, gatherRuntime } from './artifacts/browser-gatherer.js';
 import { ALL_CHECKS } from './checks/index.js';
 import { runGate } from './registry.js';
@@ -114,6 +115,9 @@ export async function runBrowserPass(options: BrowserPassOptions): Promise<SiteG
 
       for (const route of options.routes) {
         const page = await browserContext.newPage();
+        // Before any page script: a rAF loop already scheduled cannot be observed after the
+        // fact, and a shader animating under reduced motion is invisible to getAnimations().
+        await page.addInitScript(MOTION_INIT_SCRIPT);
         const consoleCollector = collectConsole(page);
         const networkCollector = collectNetwork(page);
 

@@ -11,8 +11,9 @@
  * rounded to a pass.
  */
 import type { DeployArtifact } from './deploy.js';
+import type { MotionSample } from './artifacts/motion-probe.js';
 
-export type { DeployArtifact };
+export type { DeployArtifact, MotionSample };
 
 export const SCORE_DISPLAY_MODES = [
   /** Pass or fail. Most of our checks. */
@@ -253,6 +254,12 @@ export interface RuntimeArtifact {
   readonly lcpElementTag: string | null;
   readonly runningAnimationsUnderReducedMotion: number;
   readonly posterVisibleUnderReducedMotion: boolean;
+  /**
+   * What `getAnimations()` cannot see: a `requestAnimationFrame` loop and WebGL draw calls.
+   * A tier-C shader is exactly that, so without this the reduced-motion check reports a clean
+   * pass on a page animating at 60fps under `prefers-reduced-motion: reduce`.
+   */
+  readonly motion: MotionSample;
   readonly tabStops: readonly { sdId: string | null; tag: string; x: number; y: number }[];
   readonly positiveTabIndexCount: number;
   readonly focusVisibleFailures: readonly string[];

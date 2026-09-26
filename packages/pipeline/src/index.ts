@@ -12,6 +12,7 @@ export * from './model/providers.js';
 export * from './model/router.js';
 export * from './model/pricing.js';
 export * from './antislop/tier1.js';
+export * from './antislop/tier2.js';
 export * from './antislop/tier3.js';
 export * from './library-adapter.js';
 export * from './build.js';

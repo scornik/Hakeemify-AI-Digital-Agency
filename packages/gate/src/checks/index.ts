@@ -5,6 +5,7 @@ import { CONTENT_CHECKS } from './content.js';
 import { A11Y_CHECKS } from './a11y.js';
 import { TRUST_CHECKS } from './trust.js';
 import { DEPLOY_CHECKS } from './deploy.js';
+import { MOTION_CHECKS } from './motion.js';
 
 export * from './seo.js';
 export * from './structure.js';
@@ -12,6 +13,7 @@ export * from './content.js';
 export * from './a11y.js';
 export * from './trust.js';
 export * from './deploy.js';
+export * from './motion.js';
 
 /** Every check the gate knows about. */
 export const ALL_CHECKS: readonly Check[] = [
@@ -21,6 +23,7 @@ export const ALL_CHECKS: readonly Check[] = [
   ...A11Y_CHECKS,
   ...TRUST_CHECKS,
   ...DEPLOY_CHECKS,
+  ...MOTION_CHECKS,
 ];
 
 /**

@@ -10,6 +10,9 @@
  * unit tests need neither a browser nor a Playwright install to typecheck this file. The real
  * `Page` satisfies the interface.
  */
+import { motionSampleScript, type MotionSample } from './motion-probe.js';
+
+export { MOTION_INIT_SCRIPT } from './motion-probe.js';
 import type {
   ConsoleArtifact,
   NetworkArtifact,
@@ -207,6 +210,13 @@ export async function gatherRuntime(
       )
     : { running: 0, posterVisible: true };
 
+  // Sampled on every project, not only the reduced-motion one: "is a shader animating when it
+  // should not be" and "did the shader ever render at all" are different questions, and the
+  // second one is only answerable where motion is allowed.
+  const motionSample = await page.evaluate<MotionSample>(
+    new Function(`return ${motionSampleScript()}`) as never,
+  );
+
   const horizontalScrollWidths: Record<string, { scrollWidth: number; clientWidth: number }> = {};
   for (const width of OVERFLOW_WIDTHS) {
     await page.setViewportSize({ width, height: options.viewport.height });
@@ -222,6 +232,7 @@ export async function gatherRuntime(
     lcpElementTag: lcp.tag,
     runningAnimationsUnderReducedMotion: motion.running,
     posterVisibleUnderReducedMotion: motion.posterVisible,
+    motion: motionSample,
     tabStops: tab.stops,
     positiveTabIndexCount: tab.positiveTabIndexCount,
     focusVisibleFailures,

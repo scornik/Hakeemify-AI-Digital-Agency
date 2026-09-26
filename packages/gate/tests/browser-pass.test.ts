@@ -100,6 +100,29 @@ describe('the browser pass', () => {
     expect(check?.passed).toBe(true);
   }, 120_000);
 
+  it('instruments the page, so a render loop is observable at all', async () => {
+    // The init script has to land before the page's own scripts. If it does not, the motion
+    // sample comes back `instrumented: false` and the reduced-motion loop check errors rather
+    // than passing — which is safe, but means the check never actually decides anything.
+    const reduced = PROJECTS.find((project) => project.name === 'reduced-motion');
+    if (!reduced) throw new Error('the project matrix has no reduced-motion project');
+
+    const result = await runBrowserPass({
+      root,
+      origin: 'https://ridgelineroofing.example',
+      context: cleanContext,
+      build,
+      routes: ['/'],
+      projects: [reduced],
+    });
+
+    const loop = result.reports[0]?.checks.find(
+      (check) => check.id === 'motion.no-render-loop-under-reduced-motion',
+    );
+    expect(loop?.mode, 'the probe did not run on a real page').toBe('binary');
+    expect(loop?.passed).toBe(true);
+  }, 120_000);
+
   it('exports a failure type rather than a silent fallback to the static subset', () => {
     // The distinction the two-pass split exists for: a browser that will not start is a failed
     // run, not a smaller one.
