@@ -160,3 +160,17 @@ export async function loadGateReport(
     .limit(1);
   return rows[0];
 }
+
+/** One gate report by its id. Scoped; there is no unscoped variant. */
+export async function findGateReport(
+  db: Database,
+  scope: SiteScope,
+  reportId: string,
+): Promise<typeof gateReports.$inferSelect | undefined> {
+  const rows = await db
+    .select()
+    .from(gateReports)
+    .where(and(scope.where(gateReports), eq(gateReports.reportId, reportId)))
+    .limit(1);
+  return rows[0];
+}

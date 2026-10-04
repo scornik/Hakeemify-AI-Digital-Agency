@@ -6,6 +6,7 @@
     { "path": "./packages/gate" },
     { "path": "./packages/db" },
     { "path": "./packages/harvest" },
+    { "path": "./packages/dashboard" },
     { "path": "./packages/pipeline" }
   ]
 }

@@ -135,6 +135,21 @@ bind-mounted so a run's output survives the container.
 
 ---
 
+## The dashboard
+
+```bash
+DATABASE_URL=postgres://… pnpm --filter @ada/dashboard run dev
+# http://127.0.0.1:4317
+```
+
+Four read-only pages: the run list, a run with its stage events and model calls, the gate report,
+and the gap report. Server-rendered HTML, zero client JavaScript, zero dependencies beyond
+`@ada/db`.
+
+**It binds loopback and will not bind elsewhere by accident.** It renders one client's facts and
+another's generated copy with no authentication, so `ADA_DASHBOARD_HOST` is required to change the
+host and prints a warning naming what is being exposed. Put it behind something before you do.
+
 ## Configuration
 
 Nothing is baked into the image. Everything below is read per run.
@@ -177,7 +192,9 @@ needs no extensions.
 Stated plainly, because a deployment guide that implies more than exists is worse than none:
 
 - **Nothing triggers a run.** There is no API, no queue consumer and no scheduler in the repo. You
-  invoke the image.
+  invoke the image. The dashboard is read-only and refuses any method but GET/HEAD: an
+  unauthenticated endpoint that could start a build would let anyone who reaches the port spend the
+  model budget, and `resolveBudgets` caps one run rather than the number of runs.
 - **Nothing publishes.** Stage 16 is confirm-gated and unimplemented; the engine writes a folder
   and stops. Getting that folder to a host is currently your deploy step, not its.
 - **Persistence is opt-in on `DATABASE_URL`.** With it set, the fixture applies the migration,

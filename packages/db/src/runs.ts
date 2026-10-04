@@ -223,3 +223,43 @@ export async function spendForRun(
     costUsd: rows.reduce((total, row) => total + row.costUsd, 0),
   };
 }
+
+/**
+ * Every run across every site, newest first.
+ *
+ * **Deliberately unscoped, and the only function here that is.** An operator dashboard shows the
+ * owner their own database, so a per-site handle would make the landing page impossible. The
+ * exception is a named function rather than a raw query reached around the tenancy layer, so it is
+ * visible at the call site and greppable — the same reason `CROSS_TENANT_TABLES` is a list instead
+ * of a convention.
+ *
+ * Never reachable from a client-facing path. If this ever needs to serve a tenant rather than the
+ * operator, it needs a scope, not a filter bolted on by the caller.
+ */
+export async function listAllRuns(
+  db: Database,
+  limit = 100,
+): Promise<(typeof runs.$inferSelect)[]> {
+  return db.select().from(runs).orderBy(desc(runs.createdAt)).limit(limit);
+}
+
+export async function findRun(
+  db: Database,
+  scope: SiteScope,
+  runId: string,
+): Promise<typeof runs.$inferSelect | undefined> {
+  return loadRun(db, scope, runId);
+}
+
+/** The audit rows for one run, oldest first. */
+export async function readModelCalls(
+  db: Database,
+  scope: SiteScope,
+  runId: string,
+): Promise<(typeof modelCalls.$inferSelect)[]> {
+  return db
+    .select()
+    .from(modelCalls)
+    .where(and(scope.where(modelCalls), eq(modelCalls.runId, runId)))
+    .orderBy(modelCalls.ts);
+}
