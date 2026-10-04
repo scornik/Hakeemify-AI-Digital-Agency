@@ -7,6 +7,7 @@ export default defineConfig({
       'packages/library',
       'packages/gate',
       'packages/db',
+      'packages/harvest',
       'packages/pipeline',
     ],
   },
